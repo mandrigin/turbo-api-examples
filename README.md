@@ -2,4 +2,4 @@
 
 ## Gasprice mod
 
-[`cmd/gasprice`](./cmd/gasprice)
+[`cmd/mint`](./cmd/mint)

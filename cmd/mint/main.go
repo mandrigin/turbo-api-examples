@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ledgerwatch/turbo-geth/common/dbutils"
 	"github.com/ledgerwatch/turbo-geth/eth/stagedsync"
 	"github.com/ledgerwatch/turbo-geth/eth/stagedsync/stages"
+	"github.com/ledgerwatch/turbo-geth/ethdb"
 	"github.com/ledgerwatch/turbo-geth/log"
 	"github.com/ledgerwatch/turbo-geth/turbo/node"
 
@@ -15,17 +15,22 @@ import (
 	"github.com/urfave/cli"
 )
 
-var flag = cli.StringFlag{
-	Name:  "custom-stage-greeting",
-	Value: "default-value",
-}
+var (
+	outputFileNameFlag = cli.StringFlag{
+		Name:  "output",
+		Value: "mint.csv",
+	}
 
-const (
-	customBucketName = "ZZZ_0x0F_CUSTOM_BUCKET"
+	blockNumberFlag = cli.Int64Flag{
+		Name:  "block",
+		Value: 0,
+	}
+
+	stageID = stages.SyncStage("AVG_GAS_PRICE")
 )
 
 func main() {
-	app := turbocli.MakeApp(runTurboGeth, append(turbocli.DefaultFlags, flag))
+	app := turbocli.MakeApp(runTurboGeth, append(turbocli.DefaultFlags, outputFileNameFlag, blockNumberFlag))
 	if err := app.Run(os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -36,22 +41,32 @@ func syncStages(ctx *cli.Context) stagedsync.StageBuilders {
 	return append(
 		stagedsync.DefaultStages(),
 		stagedsync.StageBuilder{
-			ID: stages.SyncStage("0x0F_CUSTOM"),
+			ID: stageID,
 			Build: func(world stagedsync.StageParameters) *stagedsync.Stage {
 				return &stagedsync.Stage{
-					ID:          stages.SyncStage("0x0F_CUSTOM"),
-					Description: "Custom Stage",
+					ID:          stageID,
+					Description: "Plot Minted Coins",
 					ExecFunc: func(s *stagedsync.StageState, _ stagedsync.Unwinder) error {
-						fmt.Println("hello from the custom stage", ctx.String(flag.Name))
-						val, err := world.DB.Get(customBucketName, []byte("test"))
-						fmt.Println("val", string(val), "err", err)
-						world.DB.Put(customBucketName, []byte("test"), []byte(ctx.String(flag.Name))) //nolint:errcheck
-						s.Done()
-						return nil
+						fileName := ctx.String(outputFileNameFlag.Name)
+						if fileName == "" {
+							fileName = "mint.csv"
+						}
+
+						err := mint(world.DB.(*ethdb.ObjectDatabase), fileName, ctx.Uint64(blockNumberFlag.Name))
+						if err != nil {
+							return err
+						}
+
+						var newBlockNum uint64
+						newBlockNum, err = s.ExecutionAt(world.DB)
+						if err != nil {
+							return err
+						}
+
+						return s.DoneAndUpdate(world.DB, newBlockNum)
 					},
+
 					UnwindFunc: func(u *stagedsync.UnwindState, s *stagedsync.StageState) error {
-						fmt.Println("hello from the custom stage unwind", ctx.String(flag.Name))
-						world.DB.Delete(customBucketName, []byte("test")) //nolint:errcheck
 						return u.Done(world.DB)
 					},
 				}
@@ -66,11 +81,7 @@ func runTurboGeth(ctx *cli.Context) {
 		stagedsync.DefaultUnwindOrder(),
 	)
 
-	tg := node.New(ctx, sync, node.Params{
-		CustomBuckets: map[string]dbutils.BucketConfigItem{
-			customBucketName: {},
-		},
-	})
+	tg := node.New(ctx, sync, node.Params{})
 
 	err := tg.Serve()
 
