@@ -26,22 +26,28 @@ func mint(db ethdb.Database, csvPath string, block uint64) error {
 
 	log.Info("plotting minted coins", "block", block, "file", csvPath)
 
-	f, err := os.OpenFile(csvPath, os.O_CREATE|os.O_APPEND, 0777)
+	f, err := os.OpenFile(csvPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0777)
 	if err != nil {
 		return err
 	}
 
-	defer f.Close()
+	defer func() {
+		fmt.Println("closed", csvPath)
+		f.Close()
+	}()
+
 	w := bufio.NewWriter(f)
-	defer w.Flush()
+	defer func() {
+		w.Flush()
+		fmt.Println("flushed", csvPath)
+	}()
 
 	var gwei uint256.Int
 	gwei.SetUint64(1000000000)
 	blockEncoded := dbutils.EncodeBlockNumber(block)
 	canonical := make(map[common.Hash]struct{})
 
-	log.Info("minted coins: checking canonical hashes...")
-	err = db.Walk(dbutils.HeaderPrefix, blockEncoded, 8*len(blockEncoded), func(k, v []byte) (bool, error) {
+	err = db.Walk(dbutils.HeaderPrefix, blockEncoded, 0, func(k, v []byte) (bool, error) {
 		if !dbutils.CheckCanonicalKey(k) {
 			return true, nil
 		}
@@ -59,7 +65,7 @@ func mint(db ethdb.Database, csvPath string, block uint64) error {
 
 	log.Info("walking through block bodies", "fromBlock", block)
 
-	err = db.Walk(dbutils.BlockBodyPrefix, blockEncoded, 8*len(blockEncoded), func(k, v []byte) (bool, error) {
+	err = db.Walk(dbutils.BlockBodyPrefix, blockEncoded, 0, func(k, v []byte) (bool, error) {
 		blockNumber := binary.BigEndian.Uint64(k[:8])
 		blockHash := common.BytesToHash(k[8:])
 		if _, isCanonical := canonical[blockHash]; !isCanonical {
@@ -104,7 +110,9 @@ func mint(db ethdb.Database, csvPath string, block uint64) error {
 			ethSpentTotal.Div(&ethSpentTotal, &gwei)
 			gasPrice := ethSpentTotal.Uint64()
 			burntGas += header.GasUsed
-			fmt.Fprintf(w, "%d, %d\n", burntGas, gasPrice)
+			if _, err := fmt.Fprintf(w, "%d, %d, %d\n", blockNumber, burntGas, gasPrice); err != nil {
+				return false, err
+			}
 		}
 		return true, nil
 	})
