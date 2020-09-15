@@ -6,7 +6,6 @@ import (
 
 	"github.com/ledgerwatch/turbo-geth/eth/stagedsync"
 	"github.com/ledgerwatch/turbo-geth/eth/stagedsync/stages"
-	"github.com/ledgerwatch/turbo-geth/ethdb"
 	"github.com/ledgerwatch/turbo-geth/log"
 	"github.com/ledgerwatch/turbo-geth/turbo/node"
 
@@ -52,22 +51,22 @@ func syncStages(ctx *cli.Context) stagedsync.StageBuilders {
 							fileName = "mint.csv"
 						}
 
-						err := mint(world.DB.(*ethdb.ObjectDatabase), fileName, ctx.Uint64(blockNumberFlag.Name))
+						err := mint(world.TX, fileName, ctx.Uint64(blockNumberFlag.Name))
 						if err != nil {
 							return err
 						}
 
 						var newBlockNum uint64
-						newBlockNum, err = s.ExecutionAt(world.DB)
+						newBlockNum, err = s.ExecutionAt(world.TX)
 						if err != nil {
 							return err
 						}
 
-						return s.DoneAndUpdate(world.DB, newBlockNum)
+						return s.DoneAndUpdate(world.TX, newBlockNum)
 					},
 
 					UnwindFunc: func(u *stagedsync.UnwindState, s *stagedsync.StageState) error {
-						return u.Done(world.DB)
+						return u.Done(world.TX)
 					},
 				}
 			},
