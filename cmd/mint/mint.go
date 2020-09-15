@@ -13,6 +13,7 @@ import (
 	"github.com/ledgerwatch/turbo-geth/core/rawdb"
 	"github.com/ledgerwatch/turbo-geth/core/types"
 	"github.com/ledgerwatch/turbo-geth/ethdb"
+	"github.com/ledgerwatch/turbo-geth/log"
 	"github.com/ledgerwatch/turbo-geth/rlp"
 
 	"github.com/holiman/uint256"
@@ -22,6 +23,8 @@ func mint(db ethdb.Database, csvPath string, block uint64) error {
 	if !strings.HasSuffix(csvPath, ".csv") {
 		csvPath += ".csv"
 	}
+
+	log.Info("plotting minted coins", "block", block, "file", csvPath)
 
 	f, err := os.OpenFile(csvPath, os.O_CREATE|os.O_APPEND, 0777)
 	if err != nil {
@@ -37,7 +40,8 @@ func mint(db ethdb.Database, csvPath string, block uint64) error {
 	blockEncoded := dbutils.EncodeBlockNumber(block)
 	canonical := make(map[common.Hash]struct{})
 
-	err = db.Walk(dbutils.HeaderPrefix, blockEncoded, 0, func(k, v []byte) (bool, error) {
+	log.Info("minted coins: checking canonical hashes...")
+	err = db.Walk(dbutils.HeaderPrefix, blockEncoded, 8*len(blockEncoded), func(k, v []byte) (bool, error) {
 		if !dbutils.CheckCanonicalKey(k) {
 			return true, nil
 		}
@@ -48,16 +52,26 @@ func mint(db ethdb.Database, csvPath string, block uint64) error {
 		return err
 	}
 
+	log.Info("minted coins: canonical hashes", "count", len(canonical))
+
 	var prevBlock uint64
 	var burntGas uint64
-	err = db.Walk(dbutils.BlockBodyPrefix, blockEncoded, 0, func(k, v []byte) (bool, error) {
+
+	log.Info("walking through block bodies", "fromBlock", block)
+
+	err = db.Walk(dbutils.BlockBodyPrefix, blockEncoded, 8*len(blockEncoded), func(k, v []byte) (bool, error) {
 		blockNumber := binary.BigEndian.Uint64(k[:8])
 		blockHash := common.BytesToHash(k[8:])
 		if _, isCanonical := canonical[blockHash]; !isCanonical {
 			return true, nil
 		}
+
 		if blockNumber != prevBlock && blockNumber != prevBlock+1 {
 			fmt.Printf("Gap [%d-%d]\n", prevBlock, blockNumber-1)
+		}
+
+		if blockNumber%1000 == 0 {
+			log.Info("walking through block bodies", "fromBlock", block, "current", blockNumber)
 		}
 
 		prevBlock = blockNumber
@@ -94,6 +108,8 @@ func mint(db ethdb.Database, csvPath string, block uint64) error {
 		}
 		return true, nil
 	})
+
+	log.Info("walking through block bodies... DONE")
 
 	return err
 }
