@@ -51,7 +51,12 @@ func syncStages(ctx *cli.Context) stagedsync.StageBuilders {
 							fileName = "mint.csv"
 						}
 
-						err := mint(world.TX, fileName, ctx.Uint64(blockNumberFlag.Name))
+						blockNumber := ctx.Uint64(blockNumberFlag.Name)
+						if s.BlockNumber > blockNumber {
+							blockNumber = s.BlockNumber
+						}
+
+						err := mint(world.TX, fileName, blockNumber)
 						if err != nil {
 							return err
 						}
