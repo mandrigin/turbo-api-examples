@@ -4,8 +4,11 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
+	"encoding/csv"
 	"fmt"
+	"io"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/ledgerwatch/turbo-geth/common"
@@ -19,6 +22,32 @@ import (
 	"github.com/holiman/uint256"
 )
 
+func readBlockNumberFromFile(f *os.File) uint64 {
+	csvReader := csv.NewReader(f)
+	previousLine := []string{}
+
+	for {
+		line, err := csvReader.Read()
+		if err == io.EOF {
+			if len(previousLine) == 0 {
+				log.Error("No fields found in the line")
+				return 0
+			}
+			numberString := previousLine[0]
+			number, err := strconv.ParseInt(numberString, 10, 64)
+			if err != nil {
+				log.Error("Error parsing block number", "numberString", numberString, "err", err)
+				return 0
+			}
+			return uint64(number)
+		} else if err != nil {
+			log.Error("Something happenned during reading", "err", err)
+			return 0
+		}
+		previousLine = line
+	}
+}
+
 func mint(db ethdb.Database, csvPath string, block uint64) error {
 	if !strings.HasSuffix(csvPath, ".csv") {
 		csvPath += ".csv"
@@ -26,10 +55,22 @@ func mint(db ethdb.Database, csvPath string, block uint64) error {
 
 	log.Info("plotting minted coins", "block", block, "file", csvPath)
 
-	f, err := os.OpenFile(csvPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0777)
+	f, err := os.OpenFile(csvPath, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0777)
 	if err != nil {
 		return err
 	}
+
+	blockNumberFromFile := readBlockNumberFromFile(f)
+
+	fmt.Println("bnff", blockNumberFromFile, "block", block)
+
+	if blockNumberFromFile > block {
+		block = blockNumberFromFile
+	}
+
+	fmt.Println("bnff", blockNumberFromFile, "block", block)
+
+	f.Seek(0, 0) // reset to the beginning
 
 	defer func() {
 		fmt.Println("closed", csvPath)
@@ -94,7 +135,9 @@ func mint(db ethdb.Database, csvPath string, block uint64) error {
 		var ethSpent uint256.Int
 		var ethSpentTotal uint256.Int
 		var totalGas uint256.Int
+
 		count := 0
+
 		for i, tx := range body.Transactions {
 			ethSpent.SetUint64(tx.Gas())
 			totalGas.Add(&totalGas, &ethSpent)

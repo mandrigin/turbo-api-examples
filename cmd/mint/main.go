@@ -52,22 +52,14 @@ func syncStages(ctx *cli.Context) stagedsync.StageBuilders {
 						}
 
 						blockNumber := ctx.Uint64(blockNumberFlag.Name)
-						if s.BlockNumber > blockNumber {
-							blockNumber = s.BlockNumber
-						}
 
 						err := mint(world.TX, fileName, blockNumber)
 						if err != nil {
 							return err
 						}
 
-						var newBlockNum uint64
-						newBlockNum, err = s.ExecutionAt(world.TX)
-						if err != nil {
-							return err
-						}
-
-						return s.DoneAndUpdate(world.TX, newBlockNum)
+						s.Done()
+						return nil
 					},
 
 					UnwindFunc: func(u *stagedsync.UnwindState, s *stagedsync.StageState) error {
