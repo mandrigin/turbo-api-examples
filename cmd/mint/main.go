@@ -25,7 +25,7 @@ var (
 		Value: 0,
 	}
 
-	stageID = stages.SyncStage("AVG_GAS_PRICE")
+	stageID = stages.SyncStage("org.ffconsulting.AVG_GAS_PRICE")
 )
 
 func main() {
