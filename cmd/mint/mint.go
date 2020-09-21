@@ -62,13 +62,9 @@ func mint(db ethdb.Database, csvPath string, block uint64) error {
 
 	blockNumberFromFile := readBlockNumberFromFile(f)
 
-	fmt.Println("bnff", blockNumberFromFile, "block", block)
-
 	if blockNumberFromFile > block {
-		block = blockNumberFromFile
+		block = blockNumberFromFile + 1 // we want the next block
 	}
-
-	fmt.Println("bnff", blockNumberFromFile, "block", block)
 
 	f.Seek(0, 0) // reset to the beginning
 
