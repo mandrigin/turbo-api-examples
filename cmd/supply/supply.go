@@ -129,17 +129,19 @@ var (
 	balanceHolder = uint256.NewInt()
 )
 
+// inspired by accounts.Account#DecodeForStorage, but way more light weight
 func DecodeAccountRLP(enc []byte) (*uint256.Int, error) {
 	if len(enc) == 0 {
 		return zeroBalance, nil
 	}
 
 	var fieldSet = enc[0]
-	var pos = 1
 
 	if fieldSet&2 <= 0 { // no balance to check
 		return zeroBalance, nil
 	}
+
+	var pos = 1
 
 	if fieldSet&1 > 0 {
 		decodeLength := int(enc[pos])
@@ -165,6 +167,8 @@ func DecodeAccountRLP(enc []byte) (*uint256.Int, error) {
 		balanceHolder.SetBytes(enc[pos+1 : pos+decodeLength+1])
 		return balanceHolder, nil
 	}
+
+	// we theoretically should never get there
 	return zeroBalance, nil
 }
 
