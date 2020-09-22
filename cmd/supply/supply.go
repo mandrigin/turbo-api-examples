@@ -16,6 +16,10 @@ type SupplyData struct {
 	Balances *big.Int
 }
 
+func isAccount(k []byte) bool {
+	return len(k) == 20
+}
+
 func calculateEthSupply(db ethdb.Database, from, to, currentStateAt uint64) (computed uint64, err error) {
 	computed = 0
 	err = nil
@@ -30,27 +34,35 @@ func calculateEthSupply(db ethdb.Database, from, to, currentStateAt uint64) (com
 
 	supply := big.NewInt(0)
 
+	balances := make(map[[20]byte]*big.Int)
+
 	for blockNumber >= from {
+		count := 0
 		if blockNumber == currentStateAt {
 			log.Info("calculating for the current state")
 			var a accounts.Account
-			count := 0
 			db.Walk(dbutils.PlainStateBucket, nil, 0, func(k, v []byte) (bool, error) {
-				if len(k) != 20 {
+				if !isAccount(k) {
+					// for storage entries we just continue
 					return true, nil
 				}
+
 				if err = a.DecodeForStorage(v); err != nil {
 					return false, err
 				}
 				count++
-				supply.Add(supply, a.Balance.ToBig())
+				balances[k] = a.Balance.ToBig()
 				if count%100000 == 0 {
 					fmt.Printf("Processed %dK account records\n", count/1000)
 				}
 				return true, nil
 			})
-			fmt.Printf("Total accounts: %d, supply: %d\n", count, supply)
 		}
+		for _, v := range balances {
+			supply = supply.Add(v)
+		}
+
+		fmt.Printf("Total accounts: %d, supply: %d\n", count, supply)
 		return 0, nil
 	}
 
