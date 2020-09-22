@@ -93,6 +93,7 @@ func calculateEthSupply(db ethdb.Database, from, currentStateAt uint64) error {
 
 		now := time.Now()
 		timeSpent := now.Sub(previousLog)
+		previousLog = now
 		blocksLeft := blockNumber - from
 		timeLeft := time.Duration(blocksLeft) * timeSpent
 
