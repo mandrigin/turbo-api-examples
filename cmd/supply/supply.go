@@ -6,9 +6,9 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/holiman/uint256"
 	"github.com/ledgerwatch/turbo-geth/common/changeset"
 	"github.com/ledgerwatch/turbo-geth/common/dbutils"
-	"github.com/ledgerwatch/turbo-geth/core/types/accounts"
 	"github.com/ledgerwatch/turbo-geth/ethdb"
 	"github.com/ledgerwatch/turbo-geth/log"
 
@@ -41,21 +41,24 @@ func calculateEthSupply(db ethdb.Database, from, currentStateAt uint64) error {
 
 		if blockNumber == currentStateAt {
 			log.Info("Calculating supply for the current state (will be slow)")
-			var a accounts.Account
 			err := db.Walk(dbutils.PlainStateBucket, nil, 0, func(k, v []byte) (bool, error) {
 				if !isAccount(k) {
 					// for storage entries we just continue
 					return true, nil
 				}
 
-				if err := a.DecodeForStorage(v); err != nil {
+				balance, err := DecodeAccountRLP(v)
+				if err != nil {
 					return false, err
 				}
 
 				count++
 				var kk [20]byte
 				copy(kk[:], k)
-				balances[kk] = a.Balance.ToBig()
+				if !balance.IsZero() {
+					balances[kk] = balance.ToBig()
+				}
+
 				if count%100000 == 0 {
 					log.Info(p.Sprintf("Processed %d account records in current state\n", count))
 				}
@@ -66,7 +69,6 @@ func calculateEthSupply(db ethdb.Database, from, currentStateAt uint64) error {
 				return err
 			}
 		} else {
-			var a accounts.Account
 			changeSet, err := db.Get(dbutils.PlainAccountChangeSetBucket, dbutils.EncodeTimestamp(blockNumber))
 			if err != nil {
 				return err
@@ -76,17 +78,21 @@ func calculateEthSupply(db ethdb.Database, from, currentStateAt uint64) error {
 				copy(kk[:], k)
 
 				if len(v) == 0 {
-					fmt.Printf("deleting %x\n", kk)
 					delete(balances, kk)
 					return nil
 				}
 
-				if err = a.DecodeForStorage(v); err != nil {
+				balance, err := DecodeAccountRLP(v)
+				if err != nil {
 					return err
 				}
 
-				fmt.Printf("updating %x: %v -> %v\n", kk, balances[kk], a.Balance.String())
-				balances[kk] = a.Balance.ToBig()
+				if balance.IsZero() {
+					delete(balances, kk)
+				} else {
+					balances[kk] = balance.ToBig()
+				}
+
 				return nil
 			})
 			if err != nil {
@@ -116,6 +122,50 @@ func calculateEthSupply(db ethdb.Database, from, currentStateAt uint64) error {
 	}
 
 	return nil
+}
+
+var (
+	zeroBalance   = uint256.NewInt()
+	balanceHolder = uint256.NewInt()
+)
+
+func DecodeAccountRLP(enc []byte) (*uint256.Int, error) {
+	if len(enc) == 0 {
+		return zeroBalance, nil
+	}
+
+	var fieldSet = enc[0]
+	var pos = 1
+
+	if fieldSet&2 <= 0 { // no balance to check
+		return zeroBalance, nil
+	}
+
+	if fieldSet&1 > 0 {
+		decodeLength := int(enc[pos])
+
+		if len(enc) < pos+decodeLength+1 {
+			return zeroBalance, fmt.Errorf(
+				"malformed CBOR for Account.Nonce: %s, Length %d",
+				enc[pos+1:], decodeLength)
+		}
+
+		pos += decodeLength + 1
+	}
+
+	if fieldSet&2 > 0 {
+		decodeLength := int(enc[pos])
+
+		if len(enc) < pos+decodeLength+1 {
+			return zeroBalance, fmt.Errorf(
+				"malformed CBOR for Account.Nonce: %s, Length %d",
+				enc[pos+1:], decodeLength)
+		}
+
+		balanceHolder.SetBytes(enc[pos+1 : pos+decodeLength+1])
+		return balanceHolder, nil
+	}
+	return zeroBalance, nil
 }
 
 func unwindEthSupply(db ethdb.Database, from, to uint64) (err error) {
