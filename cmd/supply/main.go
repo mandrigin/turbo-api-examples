@@ -47,12 +47,11 @@ func ethSupplyStage(ctx *cli.Context) stagedsync.StageBuilder {
 						return err
 					}
 
-					computed := uint64(0)
-					computed, err = calculateEthSupply(world.TX, from, to, currentStateAt)
+					err = calculateEthSupply(world.TX, from, to, currentStateAt)
 					if err != nil {
 						return err
 					}
-					return s.DoneAndUpdate(world.TX, computed)
+					return s.DoneAndUpdate(world.TX, to)
 				},
 
 				UnwindFunc: func(u *stagedsync.UnwindState, s *stagedsync.StageState) error {

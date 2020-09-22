@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/binary"
 	"math/big"
+	"time"
 
 	"github.com/ledgerwatch/turbo-geth/common/dbutils"
 	"github.com/ledgerwatch/turbo-geth/core/types/accounts"
@@ -22,10 +23,7 @@ func isAccount(k []byte) bool {
 	return len(k) == 20
 }
 
-func calculateEthSupply(db ethdb.Database, from, to, currentStateAt uint64) (computed uint64, err error) {
-	computed = 0
-	err = nil
-
+func calculateEthSupply(db ethdb.Database, from, to, currentStateAt uint64) error {
 	blockNumber := to
 	if to > currentStateAt {
 		// we can't go past the current state
@@ -38,6 +36,9 @@ func calculateEthSupply(db ethdb.Database, from, to, currentStateAt uint64) (com
 
 	p := message.NewPrinter(language.English)
 
+	var previousLog *time.Time
+	var previousBlockNumber uint64
+
 	for blockNumber >= from {
 		supply := big.NewInt(0)
 		count := 0
@@ -45,13 +46,13 @@ func calculateEthSupply(db ethdb.Database, from, to, currentStateAt uint64) (com
 		if blockNumber == currentStateAt {
 			log.Info("calculating for the current state")
 			var a accounts.Account
-			db.Walk(dbutils.PlainStateBucket, nil, 0, func(k, v []byte) (bool, error) {
+			err := db.Walk(dbutils.PlainStateBucket, nil, 0, func(k, v []byte) (bool, error) {
 				if !isAccount(k) {
 					// for storage entries we just continue
 					return true, nil
 				}
 
-				if err = a.DecodeForStorage(v); err != nil {
+				if err := a.DecodeForStorage(v); err != nil {
 					return false, err
 				}
 
@@ -65,14 +66,14 @@ func calculateEthSupply(db ethdb.Database, from, to, currentStateAt uint64) (com
 
 				return true, nil
 			})
-
+			if err != nil {
+				return err
+			}
 		} else {
-			log.Info("calculating for an older block")
-
 			var a accounts.Account
 			accountsMap, _, err := ethdb.RewindDataPlain(db, blockNumber+1, blockNumber)
 			if err != nil {
-				return 0, err
+				return err
 			}
 			current := 0
 			total := len(accountsMap)
@@ -97,7 +98,7 @@ func calculateEthSupply(db ethdb.Database, from, to, currentStateAt uint64) (com
 				}
 
 				if err = a.DecodeForStorage(v); err != nil {
-					return 0, err
+					return err
 				}
 
 				balances[kk] = a.Balance.ToBig()
@@ -108,12 +109,35 @@ func calculateEthSupply(db ethdb.Database, from, to, currentStateAt uint64) (com
 		}
 		count = len(balances)
 
-		p.Printf("Block %d, total accounts: %d, supply: %d\n", blockNumber, count, supply)
+		printLog := false
+		speed := 0.0
+		if previousLog == nil {
+			previousLog = &(time.Now())
+			printLog = true
+			previousBlockNumber = blockNumber
+		} else {
+			now := time.Now()
+			timeSpent := now.Sub(*previousLog)
+			if timeSpent > 10*time.Second {
+				printLog = true
+				speed = (previousBlockNumber - blockNumber) / float64(timeSpent)
+				previousBlockNumber = blockNumber
+				previousLog = &(time.Now())
+			}
+		}
+
+		if printLog {
+			p.Printf("Block %d, total accounts: %d, supply: %d, speed %f blocks/sec\n", blockNumber, count, supply, speed)
+		}
+
+		if err := db.Put(ethSupplyBucket, keyFromBlockNumber(blockNumber), supply.Bytes()); err != nil {
+			return err
+		}
 
 		blockNumber--
 	}
 
-	return 0, nil
+	return nil
 }
 
 func unwindEthSupply(db ethdb.Database, from, to uint64) (err error) {
