@@ -2,13 +2,14 @@ package main
 
 import (
 	"encoding/binary"
-	"fmt"
 	"math/big"
 
 	"github.com/ledgerwatch/turbo-geth/common/dbutils"
 	"github.com/ledgerwatch/turbo-geth/core/types/accounts"
 	"github.com/ledgerwatch/turbo-geth/ethdb"
 	"github.com/ledgerwatch/turbo-geth/log"
+	"golang.org/x/text/language"
+	"golang.org/x/text/message"
 )
 
 type SupplyData struct {
@@ -36,6 +37,8 @@ func calculateEthSupply(db ethdb.Database, from, to, currentStateAt uint64) (com
 
 	balances := make(map[[20]byte]*big.Int)
 
+	p := message.NewPrinter(language.English)
+
 	for blockNumber >= from {
 		count := 0
 		if blockNumber == currentStateAt {
@@ -51,18 +54,20 @@ func calculateEthSupply(db ethdb.Database, from, to, currentStateAt uint64) (com
 					return false, err
 				}
 				count++
-				balances[k] = a.Balance.ToBig()
+				var kk [20]byte
+				copy(kk[:], k)
+				balances[kk] = a.Balance.ToBig()
 				if count%100000 == 0 {
-					fmt.Printf("Processed %dK account records\n", count/1000)
+					p.Printf("Processed %d account records\n", count)
 				}
 				return true, nil
 			})
 		}
 		for _, v := range balances {
-			supply = supply.Add(v)
+			supply.Add(supply, v)
 		}
 
-		fmt.Printf("Total accounts: %d, supply: %d\n", count, supply)
+		p.Printf("Total accounts: %d, supply: %d\n", count, supply)
 		return 0, nil
 	}
 
