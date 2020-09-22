@@ -42,7 +42,13 @@ func ethSupplyStage(ctx *cli.Context) stagedsync.StageBuilder {
 						return err
 					}
 					fmt.Println("from", from, "to", to)
-					computed, err := calculateEthSupply(from, to)
+					currentStateAt, err := s.ExecutionAt(world.TX)
+					if err != nil {
+						return err
+					}
+
+					computed := uint64(0)
+					computed, err = calculateEthSupply(world.TX, from, to, currentStateAt)
 					if err != nil {
 						return err
 					}
@@ -50,7 +56,7 @@ func ethSupplyStage(ctx *cli.Context) stagedsync.StageBuilder {
 				},
 
 				UnwindFunc: func(u *stagedsync.UnwindState, s *stagedsync.StageState) error {
-					err := unwindEthSupply(u.UnwindPoint)
+					err := unwindEthSupply(world.TX, s.BlockNumber, u.UnwindPoint)
 					if err != nil {
 						return err
 					}
