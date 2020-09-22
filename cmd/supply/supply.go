@@ -40,8 +40,8 @@ func calculateEthSupply(db ethdb.Database, from, to, currentStateAt uint64) (com
 
 	for blockNumber >= from {
 		supply := big.NewInt(0)
-
 		count := 0
+
 		if blockNumber == currentStateAt {
 			log.Info("calculating for the current state")
 			var a accounts.Account
@@ -62,8 +62,10 @@ func calculateEthSupply(db ethdb.Database, from, to, currentStateAt uint64) (com
 				if count%100000 == 0 {
 					p.Printf("Processed %d account records\n", count)
 				}
+
 				return true, nil
 			})
+
 		} else {
 			log.Info("calculating for an older block")
 
@@ -104,9 +106,11 @@ func calculateEthSupply(db ethdb.Database, from, to, currentStateAt uint64) (com
 		for _, v := range balances {
 			supply.Add(supply, v)
 		}
+		count = len(balances)
 
 		p.Printf("Block %d, total accounts: %d, supply: %d\n", blockNumber, count, supply)
-		return 0, nil
+
+		blockNumber--
 	}
 
 	return 0, nil
