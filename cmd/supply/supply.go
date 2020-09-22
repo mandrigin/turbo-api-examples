@@ -8,6 +8,7 @@ import (
 	"github.com/ledgerwatch/turbo-geth/core/types/accounts"
 	"github.com/ledgerwatch/turbo-geth/ethdb"
 	"github.com/ledgerwatch/turbo-geth/log"
+
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
 )
@@ -33,13 +34,13 @@ func calculateEthSupply(db ethdb.Database, from, to, currentStateAt uint64) (com
 
 	log.Info("computing eth supply", "from", from, "to", to)
 
-	supply := big.NewInt(0)
-
 	balances := make(map[[20]byte]*big.Int)
 
 	p := message.NewPrinter(language.English)
 
 	for blockNumber >= from {
+		supply := big.NewInt(0)
+
 		count := 0
 		if blockNumber == currentStateAt {
 			log.Info("calculating for the current state")
@@ -53,6 +54,7 @@ func calculateEthSupply(db ethdb.Database, from, to, currentStateAt uint64) (com
 				if err = a.DecodeForStorage(v); err != nil {
 					return false, err
 				}
+
 				count++
 				var kk [20]byte
 				copy(kk[:], k)
@@ -62,12 +64,48 @@ func calculateEthSupply(db ethdb.Database, from, to, currentStateAt uint64) (com
 				}
 				return true, nil
 			})
+		} else {
+			log.Info("calculating for an older block")
+
+			var a accounts.Account
+			accountsMap, _, err := ethdb.RewindDataPlain(db, blockNumber+1, blockNumber)
+			if err != nil {
+				return 0, err
+			}
+			current := 0
+			total := len(accountsMap)
+			prevPercent := 0
+			for k, v := range accountsMap {
+				if total > 0 {
+					percent := int(current / total * 100)
+					if percent != prevPercent {
+						prevPercent = percent
+						p.Printf("completed %d percent", percent)
+					}
+				}
+
+				current++
+
+				var kk [20]byte
+				copy(kk[:], k)
+
+				if len(v) == 0 {
+					delete(balances, kk)
+					continue
+				}
+
+				if err = a.DecodeForStorage(v); err != nil {
+					return 0, err
+				}
+
+				balances[kk] = a.Balance.ToBig()
+			}
 		}
 		for _, v := range balances {
 			supply.Add(supply, v)
 		}
 
-		p.Printf("Total accounts: %d, supply: %d\n", count, supply)
+		p.Printf("Block %d, total accounts: %d, supply: %d\n", blockNumber, count, supply)
 		return 0, nil
 	}
 
