@@ -47,7 +47,7 @@ func ethSupplyStage(ctx *cli.Context) stagedsync.StageBuilder {
 						return err
 					}
 
-					err = calculateEthSupply(world.TX, from, to, currentStateAt)
+					err = calculateEthSupply(world.TX, from, currentStateAt)
 					if err != nil {
 						return err
 					}

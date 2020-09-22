@@ -23,12 +23,8 @@ func isAccount(k []byte) bool {
 	return len(k) == 20
 }
 
-func calculateEthSupply(db ethdb.Database, from, to, currentStateAt uint64) error {
-	blockNumber := to
-	if to > currentStateAt {
-		// we can't go past the current state
-		to = currentStateAt
-	}
+func calculateEthSupply(db ethdb.Database, from, currentStateAt uint64) error {
+	blockNumber := currentStateAt
 
 	log.Info("computing eth supply", "from", from, "to", to)
 
