@@ -111,7 +111,8 @@ func calculateEthSupply(db ethdb.Database, from, currentStateAt uint64) error {
 		}
 
 		if printLog {
-			log.Info(p.Sprintf("Block %d, total accounts: %d, supply: %d, speed %.2f blocks/sec\n", blockNumber, count, supply, speed))
+			left := time.Duration(blockNumber-from) / time.Duration(speed) * time.Second
+			log.Info(p.Sprintf("Block %d, total accounts: %d, supply: %d, speed %.2f blocks/sec left=%v\n", blockNumber, count, supply, speed, left))
 			if speed < 0.000000001 { // first launch is 0.0, but with floats you are never sure
 				log.Info("Will calculate supply for historical blocks now")
 			}
