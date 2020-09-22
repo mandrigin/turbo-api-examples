@@ -96,7 +96,7 @@ func calculateEthSupply(db ethdb.Database, from, currentStateAt uint64) error {
 		blocksLeft := blockNumber - from
 		timeLeft := time.Duration(blocksLeft) * timeSpent
 
-		log.Info(p.Sprintf("blockNum=%d, total accounts=%d, supply=%d, timePerBlock=%v timeLeft=%v\n", blockNumber, count, supply, timeSpent, timeLeft))
+		log.Info(p.Sprintf("Stats: blockNum=%d\n\ttotal accounts=%d\n\tsupply=%d\n\ttimePerBlock=%v\n\ttimeLeft=%v\n\tblocksLeft=%d\n", blockNumber, count, supply, timeSpent, timeLeft, blocksLeft))
 
 		if err := db.Put(ethSupplyBucket, keyFromBlockNumber(blockNumber), supply.Bytes()); err != nil {
 			return err
