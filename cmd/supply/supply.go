@@ -2,9 +2,11 @@ package main
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math/big"
 	"time"
 
+	"github.com/ledgerwatch/turbo-geth/common/changeset"
 	"github.com/ledgerwatch/turbo-geth/common/dbutils"
 	"github.com/ledgerwatch/turbo-geth/core/types/accounts"
 	"github.com/ledgerwatch/turbo-geth/ethdb"
@@ -35,7 +37,6 @@ func calculateEthSupply(db ethdb.Database, from, currentStateAt uint64) error {
 	previousLog := time.Now()
 
 	for blockNumber >= from {
-		supply := big.NewInt(0)
 		count := 0
 
 		if blockNumber == currentStateAt {
@@ -66,26 +67,34 @@ func calculateEthSupply(db ethdb.Database, from, currentStateAt uint64) error {
 			}
 		} else {
 			var a accounts.Account
-			accountsMap, _, err := ethdb.RewindDataPlain(db, blockNumber+1, blockNumber)
+			changeSet, err := db.Get(dbutils.PlainAccountChangeSetBucket, dbutils.EncodeTimestamp(blockNumber))
 			if err != nil {
 				return err
 			}
-			for k, v := range accountsMap {
+			err = changeset.AccountChangeSetPlainBytes(changeSet).Walk(func(k, v []byte) error {
 				var kk [20]byte
 				copy(kk[:], k)
 
 				if len(v) == 0 {
+					fmt.Printf("deleting %x\n", kk)
 					delete(balances, kk)
-					continue
+					return nil
 				}
 
 				if err = a.DecodeForStorage(v); err != nil {
 					return err
 				}
 
+				fmt.Printf("updating %x: %v -> %v\n", kk, balances[kk], a.Balance.String())
 				balances[kk] = a.Balance.ToBig()
+				return nil
+			})
+			if err != nil {
+				return err
 			}
 		}
+
+		supply := big.NewInt(0)
 		for _, v := range balances {
 			supply.Add(supply, v)
 		}
