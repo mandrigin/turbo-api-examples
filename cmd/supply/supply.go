@@ -44,7 +44,7 @@ func calculateEthSupply(db ethdb.Database, from, to, currentStateAt uint64) erro
 		count := 0
 
 		if blockNumber == currentStateAt {
-			log.Info("calculating for the current state")
+			log.Info("Calculating supply for the current state (will be slow)")
 			var a accounts.Account
 			err := db.Walk(dbutils.PlainStateBucket, nil, 0, func(k, v []byte) (bool, error) {
 				if !isAccount(k) {
@@ -61,7 +61,7 @@ func calculateEthSupply(db ethdb.Database, from, to, currentStateAt uint64) erro
 				copy(kk[:], k)
 				balances[kk] = a.Balance.ToBig()
 				if count%100000 == 0 {
-					p.Printf("Processed %d account records\n", count)
+					log.Info(p.Sprintf("Processed %d account records in current state\n", count))
 				}
 
 				return true, nil
@@ -75,20 +75,7 @@ func calculateEthSupply(db ethdb.Database, from, to, currentStateAt uint64) erro
 			if err != nil {
 				return err
 			}
-			current := 0
-			total := len(accountsMap)
-			prevPercent := 0
 			for k, v := range accountsMap {
-				if total > 0 {
-					percent := int(current / total * 100)
-					if percent != prevPercent {
-						prevPercent = percent
-						p.Printf("completed %d percent", percent)
-					}
-				}
-
-				current++
-
 				var kk [20]byte
 				copy(kk[:], k)
 
@@ -112,7 +99,8 @@ func calculateEthSupply(db ethdb.Database, from, to, currentStateAt uint64) erro
 		printLog := false
 		speed := 0.0
 		if previousLog == nil {
-			previousLog = &(time.Now())
+			now := time.Now()
+			previousLog = &now
 			printLog = true
 			previousBlockNumber = blockNumber
 		} else {
@@ -120,14 +108,17 @@ func calculateEthSupply(db ethdb.Database, from, to, currentStateAt uint64) erro
 			timeSpent := now.Sub(*previousLog)
 			if timeSpent > 10*time.Second {
 				printLog = true
-				speed = (previousBlockNumber - blockNumber) / float64(timeSpent)
+				speed = float64(previousBlockNumber-blockNumber) / float64(timeSpent)
 				previousBlockNumber = blockNumber
-				previousLog = &(time.Now())
+				previousLog = &now
 			}
 		}
 
 		if printLog {
-			p.Printf("Block %d, total accounts: %d, supply: %d, speed %f blocks/sec\n", blockNumber, count, supply, speed)
+			log.Info(p.Sprintf("Block %d, total accounts: %d, supply: %d, speed %.2f blocks/sec\n", blockNumber, count, supply, speed))
+			if speed < 0.000000001 { // first launch is 0.0, but with floats you are never sure
+				log.Info("Will calculate supply for historical blocks now")
+			}
 		}
 
 		if err := db.Put(ethSupplyBucket, keyFromBlockNumber(blockNumber), supply.Bytes()); err != nil {
