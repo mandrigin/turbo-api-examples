@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/ledgerwatch/turbo-geth/common/dbutils"
 	"github.com/ledgerwatch/turbo-geth/eth/stagedsync"
 	"github.com/ledgerwatch/turbo-geth/eth/stagedsync/stages"
 	"github.com/ledgerwatch/turbo-geth/log"
@@ -15,7 +16,8 @@ import (
 )
 
 var (
-	stageID = stages.SyncStage("org.ffconsulting.ETH_SUPPLY")
+	stageID         = stages.SyncStage("org.ffconsulting.ETH_SUPPLY")
+	ethSupplyBucket = "org.ffconsulting.tg.db.ETH_SUPPLY"
 )
 
 func main() {
@@ -40,12 +42,18 @@ func ethSupplyStage(ctx *cli.Context) stagedsync.StageBuilder {
 						return err
 					}
 					fmt.Println("from", from, "to", to)
-					// TODO: calc eth supply between blocks
-					return s.DoneAndUpdate(world.TX, to)
+					computed, err := calculateEthSupply(from, to)
+					if err != nil {
+						return err
+					}
+					return s.DoneAndUpdate(world.TX, computed)
 				},
 
 				UnwindFunc: func(u *stagedsync.UnwindState, s *stagedsync.StageState) error {
-					// TODO: undo eth calculation
+					err := unwindEthSupply(u.UnwindPoint)
+					if err != nil {
+						return err
+					}
 					return u.Done(world.TX)
 				},
 			}
@@ -59,7 +67,14 @@ func runTurboGeth(ctx *cli.Context) {
 		stagedsync.DefaultUnwindOrder(),
 	)
 
-	tg := node.New(ctx, sync, node.Params{})
+	// Adding a custom bucket where we will store eth supply per block
+	params := node.Params{
+		CustomBuckets: map[string]dbutils.BucketConfigItem{
+			ethSupplyBucket: {},
+		},
+	}
+
+	tg := node.New(ctx, sync, params)
 
 	err := tg.Serve()
 
