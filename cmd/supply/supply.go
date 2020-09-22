@@ -26,7 +26,7 @@ func isAccount(k []byte) bool {
 func calculateEthSupply(db ethdb.Database, from, currentStateAt uint64) error {
 	blockNumber := currentStateAt
 
-	log.Info("computing eth supply", "from", from, "to", to)
+	log.Info("computing eth supply", "from", from, "to", currentStateAt)
 
 	balances := make(map[[20]byte]*big.Int)
 
