@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/big"
-	"time"
 
 	"github.com/holiman/uint256"
 	"github.com/ledgerwatch/turbo-geth/common/changeset"
@@ -36,7 +35,6 @@ func calculateEthSupply(db ethdb.Database, from, currentStateAt uint64) error {
 
 	supply := uint256.NewInt()
 
-	previousLog := time.Now()
 	changedAccounts := 0
 	for blockNumber >= from {
 		count := 0
@@ -101,14 +99,9 @@ func calculateEthSupply(db ethdb.Database, from, currentStateAt uint64) error {
 
 		count = len(balances)
 
-		now := time.Now()
-		timeSpent := now.Sub(previousLog)
-		previousLog = now
-		blocksLeft := blockNumber - from
-		timeLeft := time.Duration(blocksLeft) * timeSpent
-
-		log.Info(p.Sprintf("Stats: blockNum=%d\n\ttotal accounts=%d\n\tsupply=%d\n\ttimePerBlock=%v\n\ttimeLeft=%v\n\tblocksLeft=%d\n\tchangedAccounts=%d", blockNumber, count, supply, timeSpent, timeLeft, blocksLeft, changedAccounts))
-		log.Info(p.Sprintf("Stats2: totalAdd=%d\n\ttotalRemove=%d\n\ttotalRemoveAccount=%d", totalAdd, totalRemove, totalRemoveAccount))
+		if blockNumber%1_000_000 == 0 {
+			log.Info(p.Sprintf("Stats: blockNum=%d\n\ttotal accounts with non zero balance=%d\n\tsupply=%d", blockNumber, count, supply))
+		}
 
 		if err := db.Put(ethSupplyBucket, keyFromBlockNumber(blockNumber), supply.Bytes()); err != nil {
 			return err
