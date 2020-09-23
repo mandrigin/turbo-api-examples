@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/holiman/uint256"
 	"github.com/ledgerwatch/turbo-geth/common/changeset"
@@ -33,9 +34,17 @@ func calculateEthSupply(db ethdb.Database, from, currentStateAt uint64) error {
 
 	p := message.NewPrinter(language.English)
 
+	supply := uint256.NewInt()
+
 	previousLog := time.Now()
+	changedAccounts := 0
 	for blockNumber >= from {
 		count := 0
+
+		totalRemove.Clear()
+		totalRemoveAccount.Clear()
+		totalAdd.Clear()
+		totalCreated.Clear()
 
 		if blockNumber == currentStateAt {
 			log.Info("Calculating supply for the current state (will be slow)")
@@ -45,7 +54,10 @@ func calculateEthSupply(db ethdb.Database, from, currentStateAt uint64) error {
 					return true, nil
 				}
 
-				err := DecodeAccountRLP(v, k, balances)
+				var kk [20]byte
+				copy(kk[:], k)
+
+				err := DecodeAccountRLP(v, kk, balances, supply, false)
 				if err != nil {
 					return false, err
 				}
@@ -65,30 +77,28 @@ func calculateEthSupply(db ethdb.Database, from, currentStateAt uint64) error {
 			if err != nil {
 				return err
 			}
+			changedAccounts = 0
 			err = changeset.AccountChangeSetPlainBytes(changeSet).Walk(func(k, v []byte) error {
+
 				var kk [20]byte
 				copy(kk[:], k)
 
-				if len(v) == 0 {
-					delete(balances, kk)
-					return nil
+				trace := false
+
+				if trace {
+
+					fmt.Printf("TRACE: k=%x kk=%x idx=%d\n", k, kk, changedAccounts)
 				}
 
-				return DecodeAccountRLP(v, k, balances)
+				changedAccounts++
+
+				return DecodeAccountRLP(v, kk, balances, supply, trace)
 			})
 			if err != nil {
 				return err
 			}
 		}
 
-		supply := uint256.NewInt()
-		supply.Clear()
-		tmp := uint256.NewInt()
-		for _, v := range balances {
-			tmp.SetBytes(v[:])
-			supply.Add(supply, tmp)
-			tmp.Clear()
-		}
 		count = len(balances)
 
 		now := time.Now()
@@ -97,7 +107,8 @@ func calculateEthSupply(db ethdb.Database, from, currentStateAt uint64) error {
 		blocksLeft := blockNumber - from
 		timeLeft := time.Duration(blocksLeft) * timeSpent
 
-		log.Info(p.Sprintf("Stats: blockNum=%d\n\ttotal accounts=%d\n\tsupply=%d\n\ttimePerBlock=%v\n\ttimeLeft=%v\n\tblocksLeft=%d\n", blockNumber, count, supply, timeSpent, timeLeft, blocksLeft))
+		log.Info(p.Sprintf("Stats: blockNum=%d\n\ttotal accounts=%d\n\tsupply=%d\n\ttimePerBlock=%v\n\ttimeLeft=%v\n\tblocksLeft=%d\n\tchangedAccounts=%d", blockNumber, count, supply, timeSpent, timeLeft, blocksLeft, changedAccounts))
+		log.Info(p.Sprintf("Stats2: totalAdd=%d\n\ttotalRemove=%d\n\ttotalRemoveAccount=%d", totalAdd, totalRemove, totalRemoveAccount))
 
 		if err := db.Put(ethSupplyBucket, keyFromBlockNumber(blockNumber), supply.Bytes()); err != nil {
 			return err
@@ -109,11 +120,21 @@ func calculateEthSupply(db ethdb.Database, from, currentStateAt uint64) error {
 	return nil
 }
 
+var totalRemove *uint256.Int = uint256.NewInt()
+var totalAdd *uint256.Int = uint256.NewInt()
+var totalCreated *uint256.Int = uint256.NewInt()
+var totalRemoveAccount *uint256.Int = uint256.NewInt()
+
 // inspired by accounts.Account#DecodeForStorage, but way more light weight
-func DecodeAccountRLP(enc []byte, k []byte, balances map[[20]byte]*uint256.Int) error {
+func DecodeAccountRLP(enc []byte, kk [20]byte, balances map[[20]byte]*uint256.Int, supply *uint256.Int, trace bool) error {
 	if len(enc) == 0 {
-		var kk [20]byte
-		copy(kk[:], k)
+		if balance, ok := balances[kk]; ok && balance != nil {
+			if trace {
+				fmt.Printf("delete: %v -> 0 (delete acc)\n", balance)
+			}
+			supply.Sub(supply, balance)
+			totalRemoveAccount.Add(totalRemoveAccount, balance)
+		}
 		delete(balances, kk)
 		return nil
 	}
@@ -121,6 +142,14 @@ func DecodeAccountRLP(enc []byte, k []byte, balances map[[20]byte]*uint256.Int) 
 	var fieldSet = enc[0]
 
 	if fieldSet&2 <= 0 { // no balance to check
+		if balance, ok := balances[kk]; ok && balance != nil {
+			if trace {
+				fmt.Printf("update: %v -> 0 (delete acc)\n", balance)
+			}
+			supply.Sub(supply, balance)
+			totalRemove.Add(totalRemoveAccount, balance)
+		}
+		delete(balances, kk)
 		return nil
 	}
 
@@ -147,20 +176,40 @@ func DecodeAccountRLP(enc []byte, k []byte, balances map[[20]byte]*uint256.Int) 
 				enc[pos+1:], decodeLength)
 		}
 
-		var kk [20]byte
-		copy(kk[:], k)
-
-		if decodeLength == 0 {
-			if balance, ok := balances[kk]; ok && balance != nil {
-				balance.Clear()
+		/*
+			if decodeLength == 0 {
+				if balance, ok := balances[kk]; ok && balance != nil {
+					//fmt.Printf("update %v -> 0\n", balance)
+					supply.Sub(supply, balance)
+					balance.Clear()
+					balances[kk] = balance
+				}
+				return nil
 			}
-			return nil
-		}
+		*/
 
-		if balance, ok := balances[kk]; ok && balance != nil {
-			balance.SetBytes(enc[pos+1 : pos+decodeLength+1])
+		if oldBalance, ok := balances[kk]; ok && oldBalance != nil {
+			if trace {
+				fmt.Printf("update: %v ->", oldBalance)
+			}
+			supply.Sub(supply, oldBalance)
+			totalRemove.Add(totalRemove, oldBalance)
+			oldBalance.SetBytes(enc[pos+1 : pos+decodeLength+1])
+			supply.Add(supply, oldBalance)
+			totalAdd.Add(totalAdd, oldBalance)
+			oldBalance.SetBytes(enc[pos+1 : pos+decodeLength+1])
+			if trace {
+				fmt.Printf("%v\n", oldBalance)
+			}
+			balances[kk] = oldBalance
 		} else {
-			balances[kk] = uint256.NewInt().SetBytes(enc[pos+1 : pos+decodeLength+1])
+			balance := uint256.NewInt().SetBytes(enc[pos+1 : pos+decodeLength+1])
+			if trace {
+				fmt.Printf("create: 0 -> %v\n", balance)
+			}
+			supply.Add(supply, balance)
+			totalCreated.Add(totalAdd, balance)
+			balances[kk] = balance
 		}
 	}
 
