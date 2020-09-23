@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/big"
-	"time"
 
 	"github.com/holiman/uint256"
 	"github.com/ledgerwatch/turbo-geth/common/changeset"
@@ -30,12 +29,11 @@ func calculateEthSupply(db ethdb.Database, from, currentStateAt uint64) error {
 
 	log.Info("computing eth supply", "from", from, "to", currentStateAt)
 
-	balances := make(map[[20]byte]*big.Int)
+	balances := make(map[[20]byte]*uint256.Int)
 
 	p := message.NewPrinter(language.English)
 
 	previousLog := time.Now()
-
 	for blockNumber >= from {
 		count := 0
 
@@ -47,18 +45,12 @@ func calculateEthSupply(db ethdb.Database, from, currentStateAt uint64) error {
 					return true, nil
 				}
 
-				balance, err := DecodeAccountRLP(v)
+				err := DecodeAccountRLP(v, k, balances)
 				if err != nil {
 					return false, err
 				}
 
 				count++
-				var kk [20]byte
-				copy(kk[:], k)
-				if !balance.IsZero() {
-					balances[kk] = balance.ToBig()
-				}
-
 				if count%100000 == 0 {
 					log.Info(p.Sprintf("Processed %d account records in current state\n", count))
 				}
@@ -82,27 +74,20 @@ func calculateEthSupply(db ethdb.Database, from, currentStateAt uint64) error {
 					return nil
 				}
 
-				balance, err := DecodeAccountRLP(v)
-				if err != nil {
-					return err
-				}
-
-				if balance.IsZero() {
-					delete(balances, kk)
-				} else {
-					balances[kk] = balance.ToBig()
-				}
-
-				return nil
+				return DecodeAccountRLP(v, k, balances)
 			})
 			if err != nil {
 				return err
 			}
 		}
 
-		supply := big.NewInt(0)
+		supply := uint256.NewInt()
+		supply.Clear()
+		tmp := uint256.NewInt()
 		for _, v := range balances {
-			supply.Add(supply, v)
+			tmp.SetBytes(v[:])
+			supply.Add(supply, tmp)
+			tmp.Clear()
 		}
 		count = len(balances)
 
@@ -124,21 +109,19 @@ func calculateEthSupply(db ethdb.Database, from, currentStateAt uint64) error {
 	return nil
 }
 
-var (
-	zeroBalance   = uint256.NewInt()
-	balanceHolder = uint256.NewInt()
-)
-
 // inspired by accounts.Account#DecodeForStorage, but way more light weight
-func DecodeAccountRLP(enc []byte) (*uint256.Int, error) {
+func DecodeAccountRLP(enc []byte, k []byte, balances map[[20]byte]*uint256.Int) error {
 	if len(enc) == 0 {
-		return zeroBalance, nil
+		var kk [20]byte
+		copy(kk[:], k)
+		delete(balances, kk)
+		return nil
 	}
 
 	var fieldSet = enc[0]
 
 	if fieldSet&2 <= 0 { // no balance to check
-		return zeroBalance, nil
+		return nil
 	}
 
 	var pos = 1
@@ -147,7 +130,7 @@ func DecodeAccountRLP(enc []byte) (*uint256.Int, error) {
 		decodeLength := int(enc[pos])
 
 		if len(enc) < pos+decodeLength+1 {
-			return zeroBalance, fmt.Errorf(
+			return fmt.Errorf(
 				"malformed CBOR for Account.Nonce: %s, Length %d",
 				enc[pos+1:], decodeLength)
 		}
@@ -159,17 +142,30 @@ func DecodeAccountRLP(enc []byte) (*uint256.Int, error) {
 		decodeLength := int(enc[pos])
 
 		if len(enc) < pos+decodeLength+1 {
-			return zeroBalance, fmt.Errorf(
+			return fmt.Errorf(
 				"malformed CBOR for Account.Nonce: %s, Length %d",
 				enc[pos+1:], decodeLength)
 		}
 
-		balanceHolder.SetBytes(enc[pos+1 : pos+decodeLength+1])
-		return balanceHolder, nil
+		var kk [20]byte
+		copy(kk[:], k)
+
+		if decodeLength == 0 {
+			if balance, ok := balances[kk]; ok && balance != nil {
+				balance.Clear()
+			}
+			return nil
+		}
+
+		if balance, ok := balances[kk]; ok && balance != nil {
+			balance.SetBytes(enc[pos+1 : pos+decodeLength+1])
+		} else {
+			balances[kk] = uint256.NewInt().SetBytes(enc[pos+1 : pos+decodeLength+1])
+		}
 	}
 
 	// we theoretically should never get there
-	return zeroBalance, nil
+	return nil
 }
 
 func unwindEthSupply(db ethdb.Database, from, to uint64) (err error) {
