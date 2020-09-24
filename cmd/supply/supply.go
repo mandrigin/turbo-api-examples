@@ -4,8 +4,11 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/big"
+	"os"
+	"strings"
 
 	"github.com/holiman/uint256"
+	"github.com/ledgerwatch/turbo-geth/common"
 	"github.com/ledgerwatch/turbo-geth/common/changeset"
 	"github.com/ledgerwatch/turbo-geth/common/dbutils"
 	"github.com/ledgerwatch/turbo-geth/ethdb"
@@ -77,16 +80,19 @@ func calculateEthSupply(db ethdb.Database, from, currentStateAt uint64) error {
 			}
 			changedAccounts = 0
 			err = changeset.AccountChangeSetPlainBytes(changeSet).Walk(func(k, v []byte) error {
+				trace := isInterestingAccount(k)
 
 				var kk [20]byte
 				copy(kk[:], k)
 
-				trace := false
-
 				if trace {
-
-					fmt.Printf("TRACE: k=%x kk=%x idx=%d\n", k, kk, changedAccounts)
+					fmt.Printf("BEGIN_TRACE: block=%d k=%x kk=%x idx=%d\n", blockNumber, k, kk, changedAccounts)
 				}
+				defer func() {
+					if trace {
+						fmt.Printf("END_TRACE: block=%d k=%x kk=%x idx=%d\n", blockNumber, k, kk, changedAccounts)
+					}
+				}()
 
 				changedAccounts++
 
@@ -103,14 +109,50 @@ func calculateEthSupply(db ethdb.Database, from, currentStateAt uint64) error {
 			log.Info(p.Sprintf("Stats: blockNum=%d\n\ttotal accounts with non zero balance=%d\n\tsupply=%d", blockNumber, count, supply))
 		}
 
-		if err := db.Put(ethSupplyBucket, keyFromBlockNumber(blockNumber), supply.Bytes()); err != nil {
-			return err
+		for _, acc := range accountsToTrace {
+			if _, ok := disappearedAccounts[acc]; !ok {
+				addr := common.HexToAddress(fmt.Sprintf("0x%s", acc))
+				if _, ok := balances[addr]; !ok {
+					fmt.Printf("Account %s disappered in the block %d\n", acc, blockNumber)
+					disappearedAccounts[acc] = struct{}{}
+				}
+			}
 		}
+
+		if blockNumber == 0 {
+			for k, b := range balances {
+				fmt.Printf("Accounts in Genesis %x %v\n", k, b)
+			}
+		}
+
+		/*
+			if err := db.Put(ethSupplyBucket, keyFromBlockNumber(blockNumber), supply.Bytes()); err != nil {
+				return err
+			}
+		*/
 
 		blockNumber--
 	}
 
-	return nil
+	os.Exit(0) // we are done and I don't want the sync to continue
+	panic("boomio")
+}
+
+var accountsToTrace = []string{
+	"e83604E4fF6Be7f96F6018D3eC3072ec525DFF6b",
+	"5c6F36AF90AB1A656c6ec8c7d521512762bba3E1",
+	"d6a7Ac4De7b510F0e8De519d973fA4C01Ba83400",
+}
+
+var disappearedAccounts = make(map[string]struct{})
+
+func isInterestingAccount(k []byte) bool {
+	for _, acc := range accountsToTrace {
+		if strings.EqualFold(fmt.Sprintf("%x", k), acc) {
+			return true
+		}
+	}
+	return false
 }
 
 var totalRemove *uint256.Int = uint256.NewInt()
