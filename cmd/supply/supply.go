@@ -97,6 +97,8 @@ func calculateEthSupply(db ethdb.Database, from, currentStateAt uint64) error {
 
 		blockNumber--
 	}
+
+	return nil
 }
 
 // inspired by accounts.Account#DecodeForStorage, but way more light weight
@@ -166,6 +168,8 @@ func decodeAccountAndUpdateBalance(enc []byte, address common.Address, balances 
 	balances[address] = balance
 
 	totalSupply.Add(totalSupply, balance)
+
+	return nil
 }
 
 func unwindEthSupply(db ethdb.Database, from, to uint64) (err error) {
