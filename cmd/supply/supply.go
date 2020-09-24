@@ -1,11 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"math/big"
 	"os"
-	"strings"
 
 	"github.com/holiman/uint256"
 	"github.com/ledgerwatch/turbo-geth/common"
@@ -105,6 +105,10 @@ func calculateEthSupply(db ethdb.Database, from, currentStateAt uint64) error {
 
 		count = len(balances)
 
+		if blockNumber%10_000 == 0 {
+			fmt.Printf("progress. block=%v\n", blockNumber)
+		}
+
 		if blockNumber%1_000_000 == 0 {
 			log.Info(p.Sprintf("Stats: blockNum=%d\n\ttotal accounts with non zero balance=%d\n\tsupply=%d", blockNumber, count, supply))
 		}
@@ -148,7 +152,8 @@ var disappearedAccounts = make(map[string]struct{})
 
 func isInterestingAccount(k []byte) bool {
 	for _, acc := range accountsToTrace {
-		if strings.EqualFold(fmt.Sprintf("%x", k), acc) {
+		addr := common.HexToAddress(fmt.Sprintf("0x%s", acc))
+		if bytes.Equal(addr[:], k) {
 			return true
 		}
 	}
