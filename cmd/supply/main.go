@@ -37,11 +37,6 @@ func ethSupplyStage(ctx *cli.Context) stagedsync.StageBuilder {
 				Description: "Calculate ETH supply",
 				ExecFunc: func(s *stagedsync.StageState, _ stagedsync.Unwinder) error {
 					from := s.BlockNumber
-					to, err := s.ExecutionAt(world.TX)
-					if err != nil {
-						return err
-					}
-					fmt.Println("from", from, "to", to)
 					currentStateAt, err := s.ExecutionAt(world.TX)
 					if err != nil {
 						return err
@@ -51,7 +46,7 @@ func ethSupplyStage(ctx *cli.Context) stagedsync.StageBuilder {
 					if err != nil {
 						return err
 					}
-					return s.DoneAndUpdate(world.TX, to)
+					return s.DoneAndUpdate(world.TX, currentStateAt)
 				},
 
 				UnwindFunc: func(u *stagedsync.UnwindState, s *stagedsync.StageState) error {
