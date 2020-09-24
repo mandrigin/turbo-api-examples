@@ -105,10 +105,15 @@ func calculateEthSupply(db ethdb.Database, from, currentStateAt uint64) error {
 // it uses some knowledge about how turbo-geth stores accounts
 // but it makes the operations with very good performance
 func decodeAccountAndUpdateBalance(enc []byte, address common.Address, balances map[common.Address]*uint256.Int, totalSupply *uint256.Int) error {
-	// if an account was removed
+	// if an account was removed...
 	if len(enc) == 0 {
-		// remove it from the list of balances
-		delete(balances, address)
+		// if it was in the list...
+		if balance, ok := balances[address]; ok && balance != nil {
+			// decrease total supply
+			totalSupply.Sub(totalSupply, balance)
+			// remove the account from the list of balances
+			delete(balances, address)
+		}
 		return nil
 	}
 
@@ -119,6 +124,8 @@ func decodeAccountAndUpdateBalance(enc []byte, address common.Address, balances 
 		// ...and it had some balance before
 		if balance, ok := balances[address]; ok && balance != nil {
 			// set it to 0 and update the value
+			totalSupply.Sub(totalSupply, balance)
+
 			balance.Clear()
 			balances[address] = balance
 		}
