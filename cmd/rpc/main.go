@@ -35,7 +35,7 @@ func main() {
 
 // Create interface for your API
 type SupplyAPI interface {
-	GetSupplyInfo(ctx context.Context, blockNumber rpc.BlockNumber) (interface{}, error)
+	GetSupply(ctx context.Context, blockNumber rpc.BlockNumber) (interface{}, error)
 }
 
 func APIList(kv ethdb.KV, eth ethdb.Backend, cfg *cli.Flags) []rpc.API {
