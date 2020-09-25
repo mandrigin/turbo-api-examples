@@ -10,6 +10,7 @@ import (
 	"github.com/ledgerwatch/turbo-geth/ethdb"
 	"github.com/ledgerwatch/turbo-geth/log"
 	"github.com/ledgerwatch/turbo-geth/rpc"
+
 	"github.com/spf13/cobra"
 )
 
@@ -43,7 +44,7 @@ func APIList(kv ethdb.KV, eth ethdb.Backend, cfg *cli.Flags) []rpc.API {
 
 	customAPIList := []rpc.API{
 		{
-			Namespace: "example", // replace it by preferred namespace
+			Namespace: "tg", // replace it by preferred namespace
 			Public:    true,
 			Service:   SupplyAPI(api),
 			Version:   "1.0",
