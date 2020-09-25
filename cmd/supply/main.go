@@ -6,18 +6,13 @@ import (
 
 	"github.com/ledgerwatch/turbo-geth/common/dbutils"
 	"github.com/ledgerwatch/turbo-geth/eth/stagedsync"
-	"github.com/ledgerwatch/turbo-geth/eth/stagedsync/stages"
 	"github.com/ledgerwatch/turbo-geth/log"
 	"github.com/ledgerwatch/turbo-geth/turbo/node"
-
-	turbocli "github.com/ledgerwatch/turbo-geth/turbo/cli"
+	"github.com/mandrigin/turbo-api-examples/supply"
 
 	"github.com/urfave/cli"
-)
 
-var (
-	stageID         = stages.SyncStage("org.ffconsulting.ETH_SUPPLY")
-	ethSupplyBucket = "org.ffconsulting.tg.db.ETH_SUPPLY"
+	turbocli "github.com/ledgerwatch/turbo-geth/turbo/cli"
 )
 
 func main() {
@@ -28,50 +23,15 @@ func main() {
 	}
 }
 
-func ethSupplyStage(ctx *cli.Context) stagedsync.StageBuilder {
-	return stagedsync.StageBuilder{
-		ID: stageID,
-		Build: func(world stagedsync.StageParameters) *stagedsync.Stage {
-			return &stagedsync.Stage{
-				ID:          stageID,
-				Description: "Calculate ETH supply",
-				ExecFunc: func(s *stagedsync.StageState, _ stagedsync.Unwinder) error {
-					from := s.BlockNumber
-					currentStateAt, err := s.ExecutionAt(world.TX)
-					if err != nil {
-						return err
-					}
-
-					err = calculateEthSupply(world.TX, from, currentStateAt)
-					if err != nil {
-						return err
-					}
-					return s.DoneAndUpdate(world.TX, currentStateAt)
-				},
-
-				UnwindFunc: func(u *stagedsync.UnwindState, s *stagedsync.StageState) error {
-					err := unwindEthSupply(world.TX, s.BlockNumber, u.UnwindPoint)
-					if err != nil {
-						return err
-					}
-					return u.Done(world.TX)
-				},
-			}
-		},
-	}
-}
-
 func runTurboGeth(ctx *cli.Context) {
 	sync := stagedsync.New(
-		append(stagedsync.DefaultStages(), ethSupplyStage(ctx)),
+		append(stagedsync.DefaultStages(), supply.SyncStage(ctx)),
 		stagedsync.DefaultUnwindOrder(),
 	)
 
 	// Adding a custom bucket where we will store eth supply per block
 	params := node.Params{
-		CustomBuckets: map[string]dbutils.BucketConfigItem{
-			ethSupplyBucket: {},
-		},
+		CustomBuckets: map[string]dbutils.BucketConfigItem{supply.BucketName: {}},
 	}
 
 	tg := node.New(ctx, sync, params)

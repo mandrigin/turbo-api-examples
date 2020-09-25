@@ -1,7 +1,6 @@
-package main
+package supply
 
 import (
-	"encoding/binary"
 	"fmt"
 	"math/big"
 
@@ -25,7 +24,7 @@ func isAccount(k []byte) bool {
 	return len(k) == 20
 }
 
-func calculateEthSupply(db ethdb.Database, from, currentStateAt uint64) error {
+func Calculate(db ethdb.Database, from, currentStateAt uint64) error {
 	blockNumber := currentStateAt
 
 	log.Info("computing eth supply", "from", from, "to", currentStateAt)
@@ -87,7 +86,7 @@ func calculateEthSupply(db ethdb.Database, from, currentStateAt uint64) error {
 			log.Info(p.Sprintf("Stats: blockNum=%d\n\ttotal accounts with non zero balance=%d\n\tsupply=%d", blockNumber, ethHoldersCount, totalSupply))
 		}
 
-		if err := db.Put(ethSupplyBucket, keyFromBlockNumber(blockNumber), totalSupply.Bytes()); err != nil {
+		if err := SetSupplyForBlock(db, blockNumber, totalSupply); err != nil {
 			return err
 		}
 
@@ -179,7 +178,7 @@ func decodeAccountAndUpdateBalance(enc []byte, address common.Address, balances 
 	return nil
 }
 
-func unwindEthSupply(db ethdb.Database, from, to uint64) (err error) {
+func Unwind(db ethdb.Database, from, to uint64) (err error) {
 	if from <= to {
 		// nothing to do here
 		return nil
@@ -187,10 +186,7 @@ func unwindEthSupply(db ethdb.Database, from, to uint64) (err error) {
 	log.Info("removing eth supply entries", "from", from, "to", to)
 
 	for blockNumber := from; blockNumber > to; blockNumber-- {
-		key := keyFromBlockNumber(blockNumber)
-
-		err = db.Delete(ethSupplyBucket, key)
-
+		err = DeleteSupplyForBlock(db, blockNumber)
 		if err != nil && err == ethdb.ErrKeyNotFound {
 			log.Warn("no supply entry found for block", "blockNumber", blockNumber)
 			err = nil
@@ -200,10 +196,4 @@ func unwindEthSupply(db ethdb.Database, from, to uint64) (err error) {
 	}
 
 	return nil
-}
-
-func keyFromBlockNumber(blockNumber uint64) []byte {
-	var buffer [8]byte
-	binary.BigEndian.PutUint64(buffer[:], blockNumber)
-	return buffer[:]
 }
