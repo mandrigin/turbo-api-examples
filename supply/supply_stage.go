@@ -19,13 +19,13 @@ func SyncStage(ctx *cli.Context) stagedsync.StageBuilder {
 				ID:          StageID,
 				Description: "Calculate ETH supply",
 				ExecFunc: func(s *stagedsync.StageState, _ stagedsync.Unwinder) error {
-					from := s.BlockNumber
+					from := uint64(0) //s.BlockNumber
 					currentStateAt, err := s.ExecutionAt(world.TX)
 					if err != nil {
 						return err
 					}
 
-					err = Calculate(world.TX, 0, currentStateAt)
+					err = Calculate(world.TX, from, currentStateAt)
 					if err != nil {
 						return err
 					}
