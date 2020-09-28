@@ -32,7 +32,7 @@ func runTurboGeth(ctx *cli.Context) {
 
 	// Adding a custom bucket where we will store eth supply per block
 	params := node.Params{
-		CustomBuckets: map[string]dbutils.BucketConfigItem{supply.BucketName: {}},
+		CustomBuckets: map[string]dbutils.BucketConfigItem{supply.BucketName: {}, supply.BucketNameV2: {}},
 	}
 
 	tg := node.New(ctx, sync, params)

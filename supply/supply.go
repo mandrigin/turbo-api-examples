@@ -36,7 +36,6 @@ func Calculate(db ethdb.Database, from, currentStateAt uint64) error {
 	totalSupply := uint256.NewInt()
 
 	for blockNumber >= from {
-
 		if blockNumber == currentStateAt {
 			log.Info("Calculating supply for the current state (will be slow)")
 			processed := 0
