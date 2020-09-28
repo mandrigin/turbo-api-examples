@@ -4,13 +4,14 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"os"
 
 	"github.com/holiman/uint256"
 	"github.com/ledgerwatch/turbo-geth/common"
 	"github.com/ledgerwatch/turbo-geth/common/changeset"
 	"github.com/ledgerwatch/turbo-geth/common/dbutils"
+	"github.com/ledgerwatch/turbo-geth/core"
 	"github.com/ledgerwatch/turbo-geth/core/state"
-	"github.com/ledgerwatch/turbo-geth/eth"
 	"github.com/ledgerwatch/turbo-geth/ethdb"
 	"github.com/ledgerwatch/turbo-geth/log"
 
@@ -65,6 +66,8 @@ func Calculate(db ethdb.Database, from, currentStateAt uint64) error {
 
 		if !totalSupply.Eq(validationSupply) {
 			log.Error(p.Sprintf("Mismatch: blockNum=%d\n\tsupply(old)=%d suppply(new)=%d", blockNumber, validationSupply, totalSupply))
+			os.Exit(1)
+			panic("boom")
 		}
 
 		if blockNumber%1000 == 0 {
@@ -92,6 +95,8 @@ func calculateAtBlock(db ethdb.Database, blockNumber uint64, totalSupply *uint25
 			return err
 		}
 
+		fmt.Printf("Blk %d Old balance buffer: %d\n", blockNumber, oldBalanceBuffer)
+
 		var accountDataAfterBlock []byte
 		accountDataAfterBlock, err = GetAsOf(db, false, k, blockNumber+1)
 		if err != nil {
@@ -103,6 +108,8 @@ func calculateAtBlock(db ethdb.Database, blockNumber uint64, totalSupply *uint25
 			return err
 		}
 
+		fmt.Printf("Blk %d Old balance buffer: %d\n", blockNumber, newBalanceBuffer)
+
 		totalSupply.Sub(totalSupply, oldBalanceBuffer)
 		totalSupply.Add(totalSupply, newBalanceBuffer)
 
@@ -112,41 +119,15 @@ func calculateAtBlock(db ethdb.Database, blockNumber uint64, totalSupply *uint25
 }
 
 func calculateAtGenesis(db ethdb.Database, totalSupply *uint256.Int) error {
-	var genesis = eth.DefaultConfig.Genesis
+	genesis := core.DefaultGenesisBlock()
 
-	block, _, _, err := genesis.ToBlock(nil, false)
-	if err != nil {
-		return err
-	}
-
-	for _, tx := range block.Transactions() {
-		recipient := tx.To()
-		accountDataAfterGenesis, err := GetAsOf(db, false, recipient[:], 1)
-		if err != nil {
-			return err
+	for _, account := range genesis.Alloc {
+		balance, overflow := uint256.FromBig(account.Balance)
+		if overflow {
+			panic("overflows should not happen in genesis")
 		}
-
-		err = decodeAccountBalanceTo(accountDataAfterGenesis, newBalanceBuffer)
-		if err != nil {
-			return err
-		}
-
-		totalSupply.Add(totalSupply, newBalanceBuffer)
+		totalSupply.Add(totalSupply, balance)
 	}
-
-	miner := block.Coinbase()
-
-	accountDataAfterGenesis, err := GetAsOf(db, false, miner[:], 1)
-	if err != nil {
-		return err
-	}
-
-	err = decodeAccountBalanceTo(accountDataAfterGenesis, newBalanceBuffer)
-	if err != nil {
-		return err
-	}
-
-	totalSupply.Add(totalSupply, newBalanceBuffer)
 
 	return nil
 }
@@ -155,17 +136,19 @@ func GetAsOf(db ethdb.Database, storage bool, key []byte, timestamp uint64) ([]b
 	var accData []byte
 	var err error
 	if txHolder, ok := db.(ethdb.HasTx); ok {
-		accData, err = GetAsOfTx(txHolder.Tx(), false, key, 1)
+		accData, err = GetAsOfTx(txHolder.Tx(), false, key, timestamp)
 	} else {
-		accData, err = state.GetAsOf(db.(ethdb.KV), false, key, 1)
+		accData, err = state.GetAsOf(db.(ethdb.KV), false, key, timestamp)
 	}
 	return accData, err
 }
 
 func GetAsOfTx(tx ethdb.Tx, storage bool, key []byte, timestamp uint64) ([]byte, error) {
+	fmt.Println("Get as of (TX)")
 	var dat []byte
 	v, err := state.FindByHistory(tx, storage, key, timestamp)
 	if err == nil {
+		fmt.Println("found in history")
 		dat = make([]byte, len(v))
 		copy(dat, v)
 		return dat, nil
@@ -180,6 +163,7 @@ func GetAsOfTx(tx ethdb.Tx, storage bool, key []byte, timestamp uint64) ([]byte,
 	if v == nil {
 		return nil, ethdb.ErrKeyNotFound
 	}
+	fmt.Println("found in curent state history")
 	dat = make([]byte, len(v))
 	copy(dat, v)
 	return dat, nil
