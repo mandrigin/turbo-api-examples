@@ -95,8 +95,6 @@ func calculateAtBlock(db ethdb.Database, blockNumber uint64, totalSupply *uint25
 			return err
 		}
 
-		fmt.Printf("Blk %d Old balance buffer: %d\n", blockNumber, oldBalanceBuffer)
-
 		var accountDataAfterBlock []byte
 		accountDataAfterBlock, err = GetAsOf(db, false, k, blockNumber+1)
 		if err != nil {
@@ -107,8 +105,6 @@ func calculateAtBlock(db ethdb.Database, blockNumber uint64, totalSupply *uint25
 		if err != nil {
 			return err
 		}
-
-		fmt.Printf("Blk %d Old balance buffer: %d\n", blockNumber, newBalanceBuffer)
 
 		totalSupply.Sub(totalSupply, oldBalanceBuffer)
 		totalSupply.Add(totalSupply, newBalanceBuffer)
@@ -137,18 +133,18 @@ func GetAsOf(db ethdb.Database, storage bool, key []byte, timestamp uint64) ([]b
 	var err error
 	if txHolder, ok := db.(ethdb.HasTx); ok {
 		accData, err = GetAsOfTx(txHolder.Tx(), false, key, timestamp)
+	} else if kvHolder, ok := db.(ethdb.HasKV); ok {
+		accData, err = state.GetAsOf(kvHolder.KV(), false, key, timestamp)
 	} else {
-		accData, err = state.GetAsOf(db.(ethdb.KV), false, key, timestamp)
+		panic("should be either TX or KV")
 	}
 	return accData, err
 }
 
 func GetAsOfTx(tx ethdb.Tx, storage bool, key []byte, timestamp uint64) ([]byte, error) {
-	fmt.Println("Get as of (TX)")
 	var dat []byte
 	v, err := state.FindByHistory(tx, storage, key, timestamp)
 	if err == nil {
-		fmt.Println("found in history")
 		dat = make([]byte, len(v))
 		copy(dat, v)
 		return dat, nil
