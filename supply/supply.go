@@ -70,7 +70,7 @@ func Calculate(db ethdb.Database, from, currentStateAt uint64) error {
 			panic("boom")
 		}
 
-		if blockNumber%1000 == 0 {
+		if blockNumber%10_000 == 0 {
 			log.Info(p.Sprintf("Stats: blockNum=%d\n\tsupply=%d", blockNumber, totalSupply))
 		}
 	}
@@ -86,7 +86,7 @@ var (
 func calculateAtBlock(db ethdb.Database, blockNumber uint64, totalSupply *uint256.Int) error {
 	changesetKey := dbutils.EncodeTimestamp(blockNumber)
 	changeSet, err := db.Get(dbutils.PlainAccountChangeSetBucket, changesetKey)
-	if err != nil {
+	if err != nil && err != ethdb.ErrKeyNotFound {
 		return err
 	}
 	err = changeset.AccountChangeSetPlainBytes(changeSet).Walk(func(k, accountDataBeforeBlock []byte) error {
@@ -97,7 +97,7 @@ func calculateAtBlock(db ethdb.Database, blockNumber uint64, totalSupply *uint25
 
 		var accountDataAfterBlock []byte
 		accountDataAfterBlock, err = GetAsOf(db, false, k, blockNumber+1)
-		if err != nil {
+		if err != nil && err != ethdb.ErrKeyNotFound {
 			return err
 		}
 
@@ -159,7 +159,6 @@ func GetAsOfTx(tx ethdb.Tx, storage bool, key []byte, timestamp uint64) ([]byte,
 	if v == nil {
 		return nil, ethdb.ErrKeyNotFound
 	}
-	fmt.Println("found in curent state history")
 	dat = make([]byte, len(v))
 	copy(dat, v)
 	return dat, nil
