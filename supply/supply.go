@@ -3,8 +3,6 @@ package supply
 import (
 	"errors"
 	"fmt"
-	"math/big"
-	"os"
 
 	"github.com/holiman/uint256"
 	"github.com/ledgerwatch/turbo-geth/common"
@@ -19,26 +17,20 @@ import (
 	"golang.org/x/text/message"
 )
 
-type SupplyData struct {
-	Version  uint
-	Balances *big.Int
-}
-
-func isAccount(k []byte) bool {
-	return len(k) == 20
-}
-
 func Calculate(db ethdb.Database, from, currentStateAt uint64) error {
-	log.Info("computing eth supply", "from", from, "to", currentStateAt)
+	var err error
 
 	p := message.NewPrinter(language.English)
 
 	totalSupply := uint256.NewInt()
+	from, err = getInitialPosition(db, from, totalSupply)
+	if err != nil {
+		return err
+	}
 
-	validationSupply := uint256.NewInt()
+	log.Info("computing eth supply", "from", from, "to", currentStateAt, "initialSupply", totalSupply)
 
 	for blockNumber := from; blockNumber < currentStateAt; blockNumber++ {
-		var err error
 		if blockNumber == 0 {
 			// calc from genesis
 			err = calculateAtGenesis(db, totalSupply)
@@ -47,6 +39,7 @@ func Calculate(db ethdb.Database, from, currentStateAt uint64) error {
 		}
 
 		if err != nil {
+			fmt.Println("errr while calculating supply", "err", err, "blockNumber", blockNumber)
 			return err
 		}
 
@@ -54,20 +47,6 @@ func Calculate(db ethdb.Database, from, currentStateAt uint64) error {
 		err = db.Put(BucketNameV2, dbKey, common.CopyBytes(totalSupply.Bytes()))
 		if err != nil {
 			return err
-		}
-
-		dataFromPrevRun, err := db.Get(BucketName, dbKey)
-		if err != nil {
-			panic(err)
-		}
-
-		validationSupply.Clear()
-		validationSupply.SetBytes(dataFromPrevRun)
-
-		if !totalSupply.Eq(validationSupply) {
-			log.Error(p.Sprintf("Mismatch: blockNum=%d\n\tsupply(old)=%d suppply(new)=%d", blockNumber, validationSupply, totalSupply))
-			os.Exit(1)
-			panic("boom")
 		}
 
 		if blockNumber%10_000 == 0 {
@@ -83,10 +62,33 @@ var (
 	newBalanceBuffer = uint256.NewInt()
 )
 
+func getInitialPosition(db ethdb.Database, from uint64, totalSupply *uint256.Int) (uint64, error) {
+	for {
+		if from == 0 {
+			totalSupply.Clear()
+			return 0, nil
+		}
+
+		data, err := db.Get(BucketNameV2, keyFromBlockNumber(from))
+		if errors.Is(err, ethdb.ErrKeyNotFound) {
+			from--
+			continue
+		} else if err != nil {
+			return 0, err
+		}
+
+		totalSupply.Clear()
+		totalSupply.SetBytes(data)
+
+		return from, nil
+	}
+}
+
 func calculateAtBlock(db ethdb.Database, blockNumber uint64, totalSupply *uint256.Int) error {
 	changesetKey := dbutils.EncodeTimestamp(blockNumber)
 	changeSet, err := db.Get(dbutils.PlainAccountChangeSetBucket, changesetKey)
 	if err != nil && err != ethdb.ErrKeyNotFound {
+		fmt.Println("error while searching for a changeset", err)
 		return err
 	}
 	err = changeset.AccountChangeSetPlainBytes(changeSet).Walk(func(k, accountDataBeforeBlock []byte) error {
@@ -98,6 +100,7 @@ func calculateAtBlock(db ethdb.Database, blockNumber uint64, totalSupply *uint25
 		var accountDataAfterBlock []byte
 		accountDataAfterBlock, err = GetAsOf(db, false, k, blockNumber+1)
 		if err != nil && err != ethdb.ErrKeyNotFound {
+			fmt.Println("err in get as of", err)
 			return err
 		}
 
