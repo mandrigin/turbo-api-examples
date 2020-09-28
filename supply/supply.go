@@ -9,8 +9,8 @@ import (
 	"github.com/ledgerwatch/turbo-geth/common"
 	"github.com/ledgerwatch/turbo-geth/common/changeset"
 	"github.com/ledgerwatch/turbo-geth/common/dbutils"
-	"github.com/ledgerwatch/turbo-geth/core"
 	"github.com/ledgerwatch/turbo-geth/core/state"
+	"github.com/ledgerwatch/turbo-geth/eth"
 	"github.com/ledgerwatch/turbo-geth/ethdb"
 	"github.com/ledgerwatch/turbo-geth/log"
 
@@ -112,7 +112,7 @@ func calculateAtBlock(db ethdb.Database, blockNumber uint64, totalSupply *uint25
 }
 
 func calculateAtGenesis(db ethdb.Database, totalSupply *uint256.Int) error {
-	var genesis *core.Genesis
+	var genesis = eth.DefaultConfig.Genesis
 
 	block, _, _, err := genesis.ToBlock(nil, false)
 	if err != nil {
@@ -133,6 +133,20 @@ func calculateAtGenesis(db ethdb.Database, totalSupply *uint256.Int) error {
 
 		totalSupply.Add(totalSupply, newBalanceBuffer)
 	}
+
+	miner := block.Coinbase()
+
+	accountDataAfterGenesis, err := GetAsOf(db, false, miner[:], 1)
+	if err != nil {
+		return err
+	}
+
+	err = decodeAccountBalanceTo(accountDataAfterGenesis, newBalanceBuffer)
+	if err != nil {
+		return err
+	}
+
+	totalSupply.Add(totalSupply, newBalanceBuffer)
 
 	return nil
 }
