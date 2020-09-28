@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/holiman/uint256"
+	"github.com/ledgerwatch/turbo-geth/common"
 	"github.com/ledgerwatch/turbo-geth/common/changeset"
 	"github.com/ledgerwatch/turbo-geth/common/dbutils"
 	"github.com/ledgerwatch/turbo-geth/core"
@@ -33,6 +34,8 @@ func Calculate(db ethdb.Database, from, currentStateAt uint64) error {
 
 	totalSupply := uint256.NewInt()
 
+	validationSupply := uint256.NewInt()
+
 	for blockNumber := from; blockNumber < currentStateAt; blockNumber++ {
 		var err error
 		if blockNumber == 0 {
@@ -46,7 +49,27 @@ func Calculate(db ethdb.Database, from, currentStateAt uint64) error {
 			return err
 		}
 
-		log.Info(p.Sprintf("Stats: blockNum=%d\n\tsupply=%d", blockNumber, totalSupply))
+		dbKey := keyFromBlockNumber(blockNumber)
+		err = db.Put(BucketNameV2, dbKey, common.CopyBytes(totalSupply.Bytes()))
+		if err != nil {
+			return err
+		}
+
+		dataFromPrevRun, err := db.Get(BucketName, dbKey)
+		if err != nil {
+			panic(err)
+		}
+
+		validationSupply.Clear()
+		validationSupply.SetBytes(dataFromPrevRun)
+
+		if !totalSupply.Eq(validationSupply) {
+			log.Error(p.Sprintf("Mismatch: blockNum=%d\n\tsupply(old)=%d suppply(new)=%d", blockNumber, validationSupply, totalSupply))
+		}
+
+		if blockNumber%1000 == 0 {
+			log.Info(p.Sprintf("Stats: blockNum=%d\n\tsupply=%d", blockNumber, totalSupply))
+		}
 	}
 
 	return nil
