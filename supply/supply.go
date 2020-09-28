@@ -28,9 +28,9 @@ func Calculate(db ethdb.Database, from, currentStateAt uint64) error {
 		return err
 	}
 
-	log.Info("computing eth supply", "from", from, "to", currentStateAt, "initialSupply", totalSupply)
+	log.Info(p.Sprintf("ETH supply calculation from=%d to=%d initialSupply=%d", from, currentStateAt, totalSupply))
 
-	for blockNumber := from; blockNumber < currentStateAt; blockNumber++ {
+	for blockNumber := from; blockNumber <= currentStateAt; blockNumber++ {
 		if blockNumber == 0 {
 			// calc from genesis
 			err = calculateAtGenesis(db, totalSupply)
@@ -39,20 +39,21 @@ func Calculate(db ethdb.Database, from, currentStateAt uint64) error {
 		}
 
 		if err != nil {
-			fmt.Println("errr while calculating supply", "err", err, "blockNumber", blockNumber)
 			return err
 		}
 
 		dbKey := keyFromBlockNumber(blockNumber)
-		err = db.Put(BucketNameV2, dbKey, common.CopyBytes(totalSupply.Bytes()))
+		err = db.Put(BucketName, dbKey, common.CopyBytes(totalSupply.Bytes()))
 		if err != nil {
 			return err
 		}
 
-		if blockNumber%10_000 == 0 {
+		if blockNumber%100_000 == 0 {
 			log.Info(p.Sprintf("Stats: blockNum=%d\n\tsupply=%d", blockNumber, totalSupply))
 		}
 	}
+
+	log.Info(p.Sprintf("ETH supply calculation DONE: blockNum=%d\n\tsupply=%d", currentStateAt, totalSupply))
 
 	return nil
 }
@@ -69,7 +70,7 @@ func getInitialPosition(db ethdb.Database, from uint64, totalSupply *uint256.Int
 			return 0, nil
 		}
 
-		data, err := db.Get(BucketNameV2, keyFromBlockNumber(from))
+		data, err := db.Get(BucketName, keyFromBlockNumber(from))
 		if errors.Is(err, ethdb.ErrKeyNotFound) {
 			from--
 			continue

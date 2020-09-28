@@ -8,8 +8,7 @@ import (
 	"github.com/holiman/uint256"
 )
 
-const BucketName = "org.ffconsulting.tg.db.ETH_SUPPLY"
-const BucketNameV2 = "org.ffconsulting.tg.db.ETH_SUPPLY.v2"
+const BucketName = "org.ffconsulting.tg.db.ETH_SUPPLY.v2"
 
 func SetSupplyForBlock(db ethdb.Putter, blockNumber uint64, supply *uint256.Int) error {
 	return db.Put(BucketName, keyFromBlockNumber(blockNumber), supply.Bytes())
