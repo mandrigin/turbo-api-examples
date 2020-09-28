@@ -28,7 +28,7 @@ func Calculate(db ethdb.Database, from, currentStateAt uint64) error {
 		return err
 	}
 
-	log.Info(p.Sprintf("ETH supply calculation from=%d to=%d initialSupply=%d", from, currentStateAt, totalSupply))
+	log.Info("ETH supply calculation...", "from", from, "to", currentStateAt, "initialSupply", totalSupply.ToBig().String())
 
 	for blockNumber := from; blockNumber <= currentStateAt; blockNumber++ {
 		if blockNumber == 0 {
@@ -53,7 +53,7 @@ func Calculate(db ethdb.Database, from, currentStateAt uint64) error {
 		}
 	}
 
-	log.Info(p.Sprintf("ETH supply calculation DONE: blockNum=%d\n\tsupply=%d", currentStateAt, totalSupply))
+	log.Info("ETH supply calculation... DONE", "from", from, "to", currentStateAt, "totalSupply", totalSupply.ToBig().String())
 
 	return nil
 }
