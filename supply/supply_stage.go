@@ -27,10 +27,34 @@ func SyncStage(ctx *cli.Context) stagedsync.StageBuilder {
 						return err
 					}
 
-					err = CalculateForward(world.TX, from, currentStateAt)
+					if from > currentStateAt {
+						log.Info("Computing ETH supply... DONE", "from", from, "to", currentStateAt)
+						return nil
+					}
+
+					// pick the most efficient way of calculating ETH supply
+					// backward calculation is way faster but requires about 25 minutes
+					// of reading the current state.
+					// calculating forward doesn't require any of that but it is way slower at
+					// higher block numbers.
+					// So at about 50.000 blocks, it is faster to read the current state and then
+					// quickly calculate supply for everything else.
+					// Lower than that it, it is usually faster to just calculate supply.
+					// This code will result for most people that for genesis sync it will use backward
+					// calculation, and for being near the tip -- forward one.
+					if currentStateAt-from >= 50_000 {
+						log.Info("Computing Eth supply backward", "from", from, "to", currentStateAt)
+						err = CalculateBackward(world.TX, from, currentStateAt)
+					} else {
+						log.Info("Computing Eth supply forward", "from", from, "to", currentStateAt)
+						err = CalculateForward(world.TX, from, currentStateAt)
+					}
+
 					if err != nil {
 						return err
 					}
+
+					log.Info("ETH supply calculation... DONE. use `tg_getSupply` to get values", "from", from, "to", to)
 					return s.DoneAndUpdate(world.TX, currentStateAt)
 				},
 

@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/holiman/uint256"
-	"github.com/ledgerwatch/turbo-geth/common"
 	"github.com/ledgerwatch/turbo-geth/common/changeset"
 	"github.com/ledgerwatch/turbo-geth/common/dbutils"
 	"github.com/ledgerwatch/turbo-geth/core"
@@ -36,8 +35,6 @@ func CalculateForward(db ethdb.Database, from, to uint64) error {
 		return err
 	}
 
-	log.Info("ETH supply calculation...", "from", from, "to", to, "initialSupply", totalSupply.ToBig().String())
-
 	for blockNumber := from; blockNumber <= to; blockNumber++ {
 		if blockNumber == 0 {
 			// calc from genesis
@@ -50,8 +47,7 @@ func CalculateForward(db ethdb.Database, from, to uint64) error {
 			return err
 		}
 
-		dbKey := keyFromBlockNumber(blockNumber)
-		err = db.Put(BucketName, dbKey, common.CopyBytes(totalSupply.Bytes()))
+		err = SetSupplyForBlock(db, blockNumber, totalSupply)
 		if err != nil {
 			return err
 		}
