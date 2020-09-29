@@ -25,7 +25,7 @@ func SyncStage(ctx *cli.Context) stagedsync.StageBuilder {
 						return err
 					}
 
-					err = Calculate(world.TX, from, currentStateAt)
+					err = CalculateForward(world.TX, from, currentStateAt)
 					if err != nil {
 						return err
 					}

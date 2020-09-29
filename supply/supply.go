@@ -17,7 +17,15 @@ import (
 	"golang.org/x/text/message"
 )
 
-func Calculate(db ethdb.Database, from, currentStateAt uint64) error {
+// CalculateForwards calculates the ETH supply between blocks `from` and `to` forward in time.
+// (from the smaller block to the larger one)
+// It is more efficient for the smaller block gaps because it doesn't calculate the current state supply.
+// On larger block gaps it is inefficient because of many DB calls.
+func CalculateForward(db ethdb.Database, from, to uint64) error {
+	if from > to {
+		from, to = to, from
+	}
+
 	var err error
 
 	p := message.NewPrinter(language.English)
@@ -28,9 +36,9 @@ func Calculate(db ethdb.Database, from, currentStateAt uint64) error {
 		return err
 	}
 
-	log.Info("ETH supply calculation...", "from", from, "to", currentStateAt, "initialSupply", totalSupply.ToBig().String())
+	log.Info("ETH supply calculation...", "from", from, "to", to, "initialSupply", totalSupply.ToBig().String())
 
-	for blockNumber := from; blockNumber <= currentStateAt; blockNumber++ {
+	for blockNumber := from; blockNumber <= to; blockNumber++ {
 		if blockNumber == 0 {
 			// calc from genesis
 			err = calculateAtGenesis(db, totalSupply)
@@ -53,7 +61,7 @@ func Calculate(db ethdb.Database, from, currentStateAt uint64) error {
 		}
 	}
 
-	log.Info("ETH supply calculation... DONE", "from", from, "to", currentStateAt, "totalSupply", totalSupply.ToBig().String())
+	log.Info("ETH supply calculation... DONE", "from", from, "to", to, "totalSupply", totalSupply.ToBig().String())
 
 	return nil
 }
