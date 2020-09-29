@@ -107,7 +107,7 @@ func calculateAtBlock(db ethdb.Database, blockNumber uint64, totalSupply *uint25
 		}
 
 		var accountDataAfterBlock []byte
-		accountDataAfterBlock, err = GetAsOf(db, false, k, blockNumber+1)
+		accountDataAfterBlock, err = getAsOf(db, false, k, blockNumber+1)
 		if err != nil && err != ethdb.ErrKeyNotFound {
 			fmt.Println("err in get as of", err)
 			return err
@@ -140,11 +140,14 @@ func calculateAtGenesis(db ethdb.Database, totalSupply *uint256.Int) error {
 	return nil
 }
 
-func GetAsOf(db ethdb.Database, storage bool, key []byte, timestamp uint64) ([]byte, error) {
+// getAsOf is a wrapper for state.GetAsOf for the staged sync.
+// we not always are getting `ethdb.KV`, sometimes we are getting `ethdb.Tx`
+// this code figures out what object do we get and calls a the right method.
+func getAsOf(db ethdb.Database, storage bool, key []byte, timestamp uint64) ([]byte, error) {
 	var accData []byte
 	var err error
 	if txHolder, ok := db.(ethdb.HasTx); ok {
-		accData, err = GetAsOfTx(txHolder.Tx(), false, key, timestamp)
+		accData, err = getAsOfTx(txHolder.Tx(), false, key, timestamp)
 	} else if kvHolder, ok := db.(ethdb.HasKV); ok {
 		accData, err = state.GetAsOf(kvHolder.KV(), false, key, timestamp)
 	} else {
@@ -153,7 +156,9 @@ func GetAsOf(db ethdb.Database, storage bool, key []byte, timestamp uint64) ([]b
 	return accData, err
 }
 
-func GetAsOfTx(tx ethdb.Tx, storage bool, key []byte, timestamp uint64) ([]byte, error) {
+// getAsOfTx is a reimplementation of `state.GetAsOf` but for time when we already have
+// an open transaction at hand.
+func getAsOfTx(tx ethdb.Tx, storage bool, key []byte, timestamp uint64) ([]byte, error) {
 	var dat []byte
 	v, err := state.FindByHistory(tx, storage, key, timestamp)
 	if err == nil {
@@ -215,25 +220,5 @@ func decodeAccountBalanceTo(enc []byte, to *uint256.Int) error {
 	}
 
 	to.SetBytes(enc[pos+1 : pos+decodeLength+1])
-	return nil
-}
-
-func Unwind(db ethdb.Database, from, to uint64) (err error) {
-	if from <= to {
-		// nothing to do here
-		return nil
-	}
-	log.Info("removing eth supply entries", "from", from, "to", to)
-
-	for blockNumber := from; blockNumber > to; blockNumber-- {
-		err = DeleteSupplyForBlock(db, blockNumber)
-		if err != nil && err == ethdb.ErrKeyNotFound {
-			log.Warn("no supply entry found for block", "blockNumber", blockNumber)
-			err = nil
-		} else {
-			return err
-		}
-	}
-
 	return nil
 }

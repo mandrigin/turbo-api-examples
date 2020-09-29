@@ -3,6 +3,8 @@ package supply
 import (
 	"github.com/ledgerwatch/turbo-geth/eth/stagedsync"
 	"github.com/ledgerwatch/turbo-geth/eth/stagedsync/stages"
+	"github.com/ledgerwatch/turbo-geth/ethdb"
+	"github.com/ledgerwatch/turbo-geth/log"
 
 	"github.com/urfave/cli"
 )
@@ -42,4 +44,27 @@ func SyncStage(ctx *cli.Context) stagedsync.StageBuilder {
 			}
 		},
 	}
+}
+
+func Unwind(db ethdb.Database, from, to uint64) (err error) {
+	if from > to {
+		from, to = to, from
+	}
+	if from == to {
+		// nothing to do here
+		return nil
+	}
+	log.Info("removing eth supply entries", "from", from, "to", to)
+
+	for blockNumber := from; blockNumber > to; blockNumber-- {
+		err = DeleteSupplyForBlock(db, blockNumber)
+		if err != nil && err == ethdb.ErrKeyNotFound {
+			log.Warn("no supply entry found for block", "blockNumber", blockNumber)
+			err = nil
+		} else {
+			return err
+		}
+	}
+
+	return nil
 }
