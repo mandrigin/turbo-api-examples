@@ -62,7 +62,7 @@ curl --request POST \
 	"jsonrpc": "2.0",
 	"id": 88888,
 	"method": "tg_getSupply",
-	"params": ['\''latest'\'']
+	"params": ["latest"]
 }'
 ```
 

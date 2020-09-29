@@ -47,6 +47,9 @@ func (api *API) GetSupply(ctx context.Context, rpcBlockNumber rpc.BlockNumber) (
 	var supplyValue *uint256.Int
 	supplyValue, err = supply.GetSupplyForBlock(api.db, blockNumber)
 	if err != nil {
+		if err == ethdb.ErrKeyNotFound {
+			return nil, fmt.Errorf("the ETH supply is not calculated yet for the block %d", blockNumber)
+		}
 		return nil, err
 	}
 

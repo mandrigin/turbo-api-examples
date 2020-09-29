@@ -18,9 +18,6 @@ func SetSupplyForBlock(db ethdb.Putter, blockNumber uint64, supply *uint256.Int)
 func GetSupplyForBlock(db ethdb.Getter, blockNumber uint64) (*uint256.Int, error) {
 	bytes, err := db.Get(BucketName, keyFromBlockNumber(blockNumber))
 	if err != nil {
-		if err == ethdb.ErrKeyNotFound {
-			return uint256.NewInt(), nil
-		}
 		return nil, err
 	}
 
