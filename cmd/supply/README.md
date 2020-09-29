@@ -9,6 +9,8 @@ It has the supply calculation as a sync stage, so while you run this app not
 only does your node get synced, but supply numbers for the new blocks are
 calculated too.
 
+So you can think of this app as [TurboGeth](https://github.com/ledgerwatch/turbo-geth/) but whith one additional feature.
+
 ## Usage
 
 ```
@@ -16,6 +18,12 @@ calculated too.
 ```
 
 The you wait for the sync to complete (it will include ETH supply calculation).
+
+### DataDir
+
+You can point this app to the existing `tg` datadir and it will use it just fine. It is compatible with [v2020.09.04](https://github.com/ledgerwatch/turbo-geth/releases/tag/v2020.09.04) and [v2020.09.03](https://github.com/ledgerwatch/turbo-geth/releases/tag/v2020.09.03) versions of turbo-geth.
+
+### Performance
 
 On my machine ETH supply stage takes about 4 hours.
 
