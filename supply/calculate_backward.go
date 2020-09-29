@@ -83,6 +83,8 @@ func CalculateBackward(db ethdb.Database, from, to uint64) error {
 		ethHoldersCount := len(accountBalances) // those who have non-zero balance
 
 		if blockNumber%100_000 == 0 {
+			// this could be used to compare data with
+			// https://github.com/lastmjs/eth-total-supply#total-eth-supply
 			log.Info(p.Sprintf("Stats: blockNum=%d\n\ttotal accounts with non zero balance=%d\n\tsupply=%d", blockNumber, ethHoldersCount, totalSupply))
 		}
 

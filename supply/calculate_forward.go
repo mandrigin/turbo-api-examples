@@ -57,11 +57,11 @@ func CalculateForward(db ethdb.Database, from, to uint64) error {
 		}
 
 		if blockNumber%10_000 == 0 {
+			// this could be used to compare data with
+			// https://github.com/lastmjs/eth-total-supply#total-eth-supply
 			log.Info(p.Sprintf("Stats: blockNum=%d\n\tsupply=%d", blockNumber, totalSupply))
 		}
 	}
-
-	log.Info("ETH supply calculation... DONE", "from", from, "to", to, "totalSupply", totalSupply.ToBig().String())
 
 	return nil
 }
