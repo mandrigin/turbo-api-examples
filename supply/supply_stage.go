@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	StageID = stages.SyncStage("org.ffconsulting.ETH_SUPPLY")
+	StageID = stages.SyncStage("org.ffconsulting.ETH_SUPPLY.v2")
 )
 
 func SyncStage(ctx *cli.Context) stagedsync.StageBuilder {
