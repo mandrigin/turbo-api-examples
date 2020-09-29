@@ -2,6 +2,7 @@ package supply
 
 import (
 	"encoding/binary"
+	"errors"
 
 	"github.com/ledgerwatch/turbo-geth/ethdb"
 
@@ -37,4 +38,28 @@ func keyFromBlockNumber(blockNumber uint64) []byte {
 	var buffer [8]byte
 	binary.BigEndian.PutUint64(buffer[:], blockNumber)
 	return buffer[:]
+}
+
+func GetInitialPosition(db ethdb.Database, from uint64, totalSupply *uint256.Int) (uint64, error) {
+	for {
+		if from == 0 {
+			totalSupply.Clear()
+			return 0, nil
+		}
+
+		data, err := db.Get(BucketName, keyFromBlockNumber(from))
+		if errors.Is(err, ethdb.ErrKeyNotFound) {
+			from--
+			continue
+		} else if err != nil {
+			return 0, err
+		}
+
+		if totalSupply != nil {
+			totalSupply.Clear()
+			totalSupply.SetBytes(data)
+		}
+
+		return from, nil
+	}
 }

@@ -19,6 +19,15 @@ func isAccount(k []byte) bool {
 }
 
 func CalculateBackward(db ethdb.Database, from, to uint64) error {
+	var err error
+
+	// adjust the initial position based on what we have in the DB
+	// here, we don't need to set the initial supply, so we pass `nil` there
+	from, err = GetInitialPosition(db, from, nil)
+	if err != nil {
+		return err
+	}
+
 	blockNumber := to
 
 	accountBalances := make(map[common.Address]*uint256.Int)

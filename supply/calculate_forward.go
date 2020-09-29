@@ -30,7 +30,11 @@ func CalculateForward(db ethdb.Database, from, to uint64) error {
 	p := message.NewPrinter(language.English)
 
 	totalSupply := uint256.NewInt()
-	from, err = getInitialPosition(db, from, totalSupply)
+
+	// adjust the initial position based on what we have in the DB
+	// calculating forward from N to M depends on supply for the block N-1 being present in the DB
+	// (so it doesn't have to recalculate everything from genesis over and over again)
+	from, err = GetInitialPosition(db, from, totalSupply)
 	if err != nil {
 		return err
 	}
@@ -66,28 +70,6 @@ var (
 	oldBalanceBuffer = uint256.NewInt()
 	newBalanceBuffer = uint256.NewInt()
 )
-
-func getInitialPosition(db ethdb.Database, from uint64, totalSupply *uint256.Int) (uint64, error) {
-	for {
-		if from == 0 {
-			totalSupply.Clear()
-			return 0, nil
-		}
-
-		data, err := db.Get(BucketName, keyFromBlockNumber(from))
-		if errors.Is(err, ethdb.ErrKeyNotFound) {
-			from--
-			continue
-		} else if err != nil {
-			return 0, err
-		}
-
-		totalSupply.Clear()
-		totalSupply.SetBytes(data)
-
-		return from, nil
-	}
-}
 
 func calculateAtBlock(db ethdb.Database, blockNumber uint64, totalSupply *uint256.Int) error {
 	changesetKey := dbutils.EncodeTimestamp(blockNumber)
