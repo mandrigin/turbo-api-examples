@@ -54,7 +54,7 @@ func SyncStage(ctx *cli.Context) stagedsync.StageBuilder {
 						return err
 					}
 
-					log.Info("ETH supply calculation... DONE. use `tg_getSupply` to get values", "from", from, "to", to)
+					log.Info("ETH supply calculation... DONE. use `tg_getSupply` to get values", "from", from, "to", currentStateAt)
 					return s.DoneAndUpdate(world.TX, currentStateAt)
 				},
 
