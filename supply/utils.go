@@ -37,10 +37,12 @@ func keyFromBlockNumber(blockNumber uint64) []byte {
 	return buffer[:]
 }
 
-func GetInitialPosition(db ethdb.Database, from uint64, totalSupply *uint256.Int) (uint64, error) {
+func GetInitialPosition(db ethdb.Database, from uint64, initialSupply *uint256.Int) (uint64, error) {
 	for {
 		if from == 0 {
-			totalSupply.Clear()
+			if initialSupply != nil {
+				initialSupply.Clear()
+			}
 			return 0, nil
 		}
 
@@ -52,9 +54,9 @@ func GetInitialPosition(db ethdb.Database, from uint64, totalSupply *uint256.Int
 			return 0, err
 		}
 
-		if totalSupply != nil {
-			totalSupply.Clear()
-			totalSupply.SetBytes(data)
+		if initialSupply != nil {
+			initialSupply.Clear()
+			initialSupply.SetBytes(data)
 		}
 
 		return from, nil
