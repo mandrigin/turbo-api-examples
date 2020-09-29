@@ -2,7 +2,6 @@ package supply
 
 import (
 	"fmt"
-	"math/big"
 
 	"github.com/holiman/uint256"
 	"github.com/ledgerwatch/turbo-geth/common"
@@ -15,19 +14,21 @@ import (
 	"golang.org/x/text/message"
 )
 
-type SupplyData struct {
-	Version  uint
-	Balances *big.Int
-}
-
 func isAccount(k []byte) bool {
 	return len(k) == 20
 }
 
-func Calculate(db ethdb.Database, from, currentStateAt uint64) error {
-	blockNumber := currentStateAt
+func CalculateBackward(db ethdb.Database, from, to uint64) error {
+	var err error
 
-	log.Info("computing eth supply", "from", from, "to", currentStateAt)
+	// adjust the initial position based on what we have in the DB
+	// here, we don't need to set the initial supply, so we pass `nil` there
+	from, err = GetInitialPosition(db, from, nil)
+	if err != nil {
+		return err
+	}
+
+	blockNumber := to
 
 	accountBalances := make(map[common.Address]*uint256.Int)
 
@@ -36,8 +37,7 @@ func Calculate(db ethdb.Database, from, currentStateAt uint64) error {
 	totalSupply := uint256.NewInt()
 
 	for blockNumber >= from {
-
-		if blockNumber == currentStateAt {
+		if blockNumber == to {
 			log.Info("Calculating supply for the current state (will be slow)")
 			processed := 0
 			err := db.Walk(dbutils.PlainStateBucket, nil, 0, func(k, v []byte) (bool, error) {
@@ -82,7 +82,9 @@ func Calculate(db ethdb.Database, from, currentStateAt uint64) error {
 
 		ethHoldersCount := len(accountBalances) // those who have non-zero balance
 
-		if blockNumber%10_000 == 0 {
+		if blockNumber%100_000 == 0 {
+			// this could be used to compare data with
+			// https://github.com/lastmjs/eth-total-supply#total-eth-supply
 			log.Info(p.Sprintf("Stats: blockNum=%d\n\ttotal accounts with non zero balance=%d\n\tsupply=%d", blockNumber, ethHoldersCount, totalSupply))
 		}
 
@@ -174,26 +176,6 @@ func decodeAccountAndUpdateBalance(enc []byte, address common.Address, balances 
 	balances[address] = balance
 
 	totalSupply.Add(totalSupply, balance)
-
-	return nil
-}
-
-func Unwind(db ethdb.Database, from, to uint64) (err error) {
-	if from <= to {
-		// nothing to do here
-		return nil
-	}
-	log.Info("removing eth supply entries", "from", from, "to", to)
-
-	for blockNumber := from; blockNumber > to; blockNumber-- {
-		err = DeleteSupplyForBlock(db, blockNumber)
-		if err != nil && err == ethdb.ErrKeyNotFound {
-			log.Warn("no supply entry found for block", "blockNumber", blockNumber)
-			err = nil
-		} else {
-			return err
-		}
-	}
 
 	return nil
 }
