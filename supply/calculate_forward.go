@@ -52,7 +52,7 @@ func CalculateForward(db ethdb.Database, from, to uint64) error {
 			return err
 		}
 
-		if blockNumber%100_000 == 0 {
+		if blockNumber%10_000 == 0 {
 			log.Info(p.Sprintf("Stats: blockNum=%d\n\tsupply=%d", blockNumber, totalSupply))
 		}
 	}
