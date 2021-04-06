@@ -68,7 +68,7 @@ func CalculateBackward(db ethdb.Database, from, to uint64) error {
 			// we need to apply changesets by key blockNumber + 1 to the state
 			changesetKey := dbutils.EncodeBlockNumber(blockNumber + 1)
 
-			err = changeset.Walk(historyTx.(ethdb.HasTx).Tx(), dbutils.PlainAccountChangeSetBucket, changesetKey, 8*8, func(blockN uint64, k, v []byte) (bool, error) {
+			err = changeset.Walk(db, dbutils.PlainAccountChangeSetBucket, changesetKey, 8*8, func(blockN uint64, k, v []byte) (bool, error) {
 				address := common.BytesToAddress(k)
 				innerErr := decodeAccountAndUpdateBalance(v, address, accountBalances, totalSupply)
 				if innerErr == nil {
