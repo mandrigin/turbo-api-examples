@@ -72,34 +72,30 @@ var (
 )
 
 func calculateAtBlock(db ethdb.Database, blockNumber uint64, totalSupply *uint256.Int) error {
-	changesetKey := dbutils.EncodeTimestamp(blockNumber)
-	changeSet, err := db.Get(dbutils.PlainAccountChangeSetBucket, changesetKey)
-	if err != nil && err != ethdb.ErrKeyNotFound {
-		fmt.Println("error while searching for a changeset", err)
-		return err
-	}
-	err = changeset.AccountChangeSetPlainBytes(changeSet).Walk(func(k, accountDataBeforeBlock []byte) error {
+	changesetKey := dbutils.EncodeBlockNumber(blockNumber)
+
+	err := changeset.Walk(historyTx.(ethdb.HasTx).Tx(), dbutils.PlainAccountChangeSetBucket, changesetKey, 8*8, func(blockN uint64, k, accountDataBeforeBlock []byte) (bool, error) {
 		err = decodeAccountBalanceTo(accountDataBeforeBlock, oldBalanceBuffer)
 		if err != nil {
-			return err
+			return false, err
 		}
 
 		var accountDataAfterBlock []byte
 		accountDataAfterBlock, err = getAsOf(db, false, k, blockNumber+1)
 		if err != nil && err != ethdb.ErrKeyNotFound {
 			fmt.Println("err in get as of", err)
-			return err
+			return false, err
 		}
 
 		err = decodeAccountBalanceTo(accountDataAfterBlock, newBalanceBuffer)
 		if err != nil {
-			return err
+			return false, err
 		}
 
 		totalSupply.Sub(totalSupply, oldBalanceBuffer)
 		totalSupply.Add(totalSupply, newBalanceBuffer)
 
-		return nil
+		return true, nil
 	})
 	return err
 }
