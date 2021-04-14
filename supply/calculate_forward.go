@@ -1,6 +1,7 @@
 package supply
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/holiman/uint256"
@@ -121,8 +122,15 @@ func getAsOf(db ethdb.Database, storage bool, key []byte, timestamp uint64) ([]b
 	var err error
 	if txHolder, ok := db.(ethdb.HasTx); ok {
 		accData, err = state.GetAsOf(txHolder.Tx(), false, key, timestamp)
+	} else if kvDB, ok := db.(*ethdb.ObjectDatabase); ok {
+		tx, err := kvDB.RwKV().BeginRw(context.TODO())
+		if err != nil {
+			return nil, err
+		}
+		defer tx.Commit(context.TODO())
+		accData, err = state.GetAsOf(tx, false, key, timestamp)
 	} else {
-		panic(fmt.Sprintf("should be a TX, got %T %+v", db, db))
+		panic(fmt.Sprintf("should be a TX or a object database, got %T %+v", db, db))
 	}
 	return accData, err
 }
