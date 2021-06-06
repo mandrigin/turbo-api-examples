@@ -28,6 +28,7 @@ func runTurboGeth(ctx *cli.Context) {
 	sync := stagedsync.New(
 		append(stagedsync.DefaultStages(), supply.SyncStage(ctx)),
 		stagedsync.DefaultUnwindOrder(),
+		stagedsync.OptionalParameters{},
 	)
 
 	// Adding a custom bucket where we will store eth supply per block

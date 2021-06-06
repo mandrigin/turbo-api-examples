@@ -28,7 +28,7 @@ func GetSupplyForBlock(db ethdb.Getter, blockNumber uint64) (*uint256.Int, error
 }
 
 func DeleteSupplyForBlock(db ethdb.Deleter, blockNumber uint64) error {
-	return db.Delete(BucketName, keyFromBlockNumber(blockNumber))
+	return db.Delete(BucketName, keyFromBlockNumber(blockNumber), nil)
 }
 
 func keyFromBlockNumber(blockNumber uint64) []byte {

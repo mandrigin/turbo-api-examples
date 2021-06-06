@@ -17,7 +17,7 @@ var _ SupplyAPI = &API{}
 
 // API - implementation of ExampleApi
 type API struct {
-	kv ethdb.KV
+	kv ethdb.RoKV
 	db ethdb.Getter
 }
 
@@ -26,7 +26,7 @@ type GetSupplyResponse struct {
 	Supply      string `json:"supply"`
 }
 
-func NewAPI(kv ethdb.KV, db ethdb.Getter) *API {
+func NewAPI(kv ethdb.RoKV, db ethdb.Getter) *API {
 	return &API{kv: kv, db: db}
 }
 
@@ -36,7 +36,7 @@ func (api *API) GetSupply(ctx context.Context, rpcBlockNumber rpc.BlockNumber) (
 	if rpcBlockNumber == rpc.PendingBlockNumber {
 		return nil, fmt.Errorf("supply for pending block not supported")
 	} else if rpcBlockNumber == rpc.LatestBlockNumber {
-		blockNumber, _, err = stages.GetStageProgress(api.db, supply.StageID)
+		blockNumber, err = stages.GetStageProgress(api.db, supply.StageID)
 		if err != nil {
 			return nil, err
 		}

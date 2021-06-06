@@ -66,18 +66,16 @@ func CalculateBackward(db ethdb.Database, from, to uint64) error {
 		} else {
 			// to get the state for blockNumber if we have the state for blockNuber + 1
 			// we need to apply changesets by key blockNumber + 1 to the state
-			changesetKey := dbutils.EncodeTimestamp(blockNumber + 1)
-			changeSet, err := db.Get(dbutils.PlainAccountChangeSetBucket, changesetKey)
-			if err != nil {
-				return err
-			}
-			err = changeset.AccountChangeSetPlainBytes(changeSet).Walk(func(k, v []byte) error {
+			changesetKey := dbutils.EncodeBlockNumber(blockNumber + 1)
+
+			err = changeset.Walk(db, dbutils.PlainAccountChangeSetBucket, changesetKey, 8*8, func(blockN uint64, k, v []byte) (bool, error) {
 				address := common.BytesToAddress(k)
-				return decodeAccountAndUpdateBalance(v, address, accountBalances, totalSupply)
+				innerErr := decodeAccountAndUpdateBalance(v, address, accountBalances, totalSupply)
+				if innerErr == nil {
+					return true, nil
+				}
+				return false, innerErr
 			})
-			if err != nil {
-				return err
-			}
 		}
 
 		ethHoldersCount := len(accountBalances) // those who have non-zero balance

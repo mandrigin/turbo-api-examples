@@ -6,7 +6,9 @@ import (
 
 	"github.com/ledgerwatch/turbo-geth/cmd/rpcdaemon/cli"
 	"github.com/ledgerwatch/turbo-geth/cmd/rpcdaemon/commands"
+	"github.com/ledgerwatch/turbo-geth/cmd/rpcdaemon/filters"
 	"github.com/ledgerwatch/turbo-geth/cmd/utils"
+	"github.com/ledgerwatch/turbo-geth/core"
 	"github.com/ledgerwatch/turbo-geth/ethdb"
 	"github.com/ledgerwatch/turbo-geth/log"
 	"github.com/ledgerwatch/turbo-geth/rpc"
@@ -38,8 +40,8 @@ type SupplyAPI interface {
 	GetSupply(ctx context.Context, blockNumber rpc.BlockNumber) (interface{}, error)
 }
 
-func APIList(kv ethdb.KV, eth ethdb.Backend, cfg *cli.Flags) []rpc.API {
-	dbReader := ethdb.NewObjectDatabase(kv)
+func APIList(kv ethdb.RoKV, eth core.ApiBackend, cfg *cli.Flags) []rpc.API {
+	dbReader := ethdb.NewObjectDatabase(kv.(ethdb.RwKV)) //FIXME: Hack, find a better way.
 	api := NewAPI(kv, dbReader)
 
 	customAPIList := []rpc.API{
@@ -51,6 +53,8 @@ func APIList(kv ethdb.KV, eth ethdb.Backend, cfg *cli.Flags) []rpc.API {
 		},
 	}
 
+	f := filters.New(eth)
+
 	// Add default TurboGeth api's
-	return commands.APIList(kv, eth, *cfg, customAPIList)
+	return commands.APIList(context.TODO(), kv, eth, f, *cfg, customAPIList)
 }

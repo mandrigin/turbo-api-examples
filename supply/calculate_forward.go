@@ -1,7 +1,7 @@
 package supply
 
 import (
-	"errors"
+	"context"
 	"fmt"
 
 	"github.com/holiman/uint256"
@@ -72,36 +72,32 @@ var (
 )
 
 func calculateAtBlock(db ethdb.Database, blockNumber uint64, totalSupply *uint256.Int) error {
-	changesetKey := dbutils.EncodeTimestamp(blockNumber)
-	changeSet, err := db.Get(dbutils.PlainAccountChangeSetBucket, changesetKey)
-	if err != nil && err != ethdb.ErrKeyNotFound {
-		fmt.Println("error while searching for a changeset", err)
-		return err
-	}
-	err = changeset.AccountChangeSetPlainBytes(changeSet).Walk(func(k, accountDataBeforeBlock []byte) error {
-		err = decodeAccountBalanceTo(accountDataBeforeBlock, oldBalanceBuffer)
+	changesetKey := dbutils.EncodeBlockNumber(blockNumber)
+
+	errWalk := changeset.Walk(db, dbutils.PlainAccountChangeSetBucket, changesetKey, 8*8, func(blockN uint64, k, accountDataBeforeBlock []byte) (bool, error) {
+		err := decodeAccountBalanceTo(accountDataBeforeBlock, oldBalanceBuffer)
 		if err != nil {
-			return err
+			return false, err
 		}
 
 		var accountDataAfterBlock []byte
 		accountDataAfterBlock, err = getAsOf(db, false, k, blockNumber+1)
 		if err != nil && err != ethdb.ErrKeyNotFound {
 			fmt.Println("err in get as of", err)
-			return err
+			return false, err
 		}
 
 		err = decodeAccountBalanceTo(accountDataAfterBlock, newBalanceBuffer)
 		if err != nil {
-			return err
+			return false, err
 		}
 
 		totalSupply.Sub(totalSupply, oldBalanceBuffer)
 		totalSupply.Add(totalSupply, newBalanceBuffer)
 
-		return nil
+		return true, nil
 	})
-	return err
+	return errWalk
 }
 
 func calculateAtGenesis(db ethdb.Database, totalSupply *uint256.Int) error {
@@ -125,38 +121,18 @@ func getAsOf(db ethdb.Database, storage bool, key []byte, timestamp uint64) ([]b
 	var accData []byte
 	var err error
 	if txHolder, ok := db.(ethdb.HasTx); ok {
-		accData, err = getAsOfTx(txHolder.Tx(), false, key, timestamp)
-	} else if kvHolder, ok := db.(ethdb.HasKV); ok {
-		accData, err = state.GetAsOf(kvHolder.KV(), false, key, timestamp)
+		accData, err = state.GetAsOf(txHolder.Tx(), false, key, timestamp)
+	} else if kvDB, ok := db.(*ethdb.ObjectDatabase); ok {
+		tx, err := kvDB.RwKV().BeginRw(context.TODO())
+		if err != nil {
+			return nil, err
+		}
+		defer tx.Commit(context.TODO())
+		accData, err = state.GetAsOf(tx, false, key, timestamp)
 	} else {
-		panic("should be either TX or KV")
+		panic(fmt.Sprintf("should be a TX or a object database, got %T %+v", db, db))
 	}
 	return accData, err
-}
-
-// getAsOfTx is a reimplementation of `state.GetAsOf` but for time when we already have
-// an open transaction at hand.
-func getAsOfTx(tx ethdb.Tx, storage bool, key []byte, timestamp uint64) ([]byte, error) {
-	var dat []byte
-	v, err := state.FindByHistory(tx, storage, key, timestamp)
-	if err == nil {
-		dat = make([]byte, len(v))
-		copy(dat, v)
-		return dat, nil
-	}
-	if !errors.Is(err, ethdb.ErrKeyNotFound) {
-		return nil, err
-	}
-	v, err = tx.Get(dbutils.PlainStateBucket, key)
-	if err != nil {
-		return nil, err
-	}
-	if v == nil {
-		return nil, ethdb.ErrKeyNotFound
-	}
-	dat = make([]byte, len(v))
-	copy(dat, v)
-	return dat, nil
 }
 
 // inspired by accounts.Account#DecodeForStorage, but way more light weight
